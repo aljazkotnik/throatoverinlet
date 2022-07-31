@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" style="background-color: black;">
+<html lang="en">
 	<head>
 		<title>ThroatOverInlet</title>
 		<link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
@@ -7,13 +7,27 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 		
-		<link rel="stylesheet" href="./style/style.css">
 		
-				
+		<!-- STYLING -->
+		<link rel="stylesheet" href="./style/app.css">
+  
+  
+		<link rel="preconnect" href="https://fonts.gstatic.com">
+		<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed&family=Roboto:wght@300&display=swap" rel="stylesheet">
+  
+		<link rel="stylesheet" href="./style/font-awesome_4.7.0.min.css">
+		
 	</head>
 	<body>
-	    
-		<script src="./code/dist/images.js"></script>
+	    <!-- `pointer-events: none;` is crucial to allow functionality through -->
+		<div id="dragAndDrop" style="position: fixed; top: 0px; left: 0px; height: 100%; width: 100%; z-index: -1;"></div>
+		
+		
+		<div id="header" class="unselectable">
+		  <h1 contenteditable="true">THROATOVERINLET</h1>
+		</DIV>
+		
+		<script src="./code/dist/app.js"></script>
 
 	</body>
 </html>
