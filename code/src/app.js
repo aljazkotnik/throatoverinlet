@@ -1,7 +1,10 @@
 import dragDropHandler from "./support/dragDropHandler.js";
+import scatterplot from "./plots/scatterplot.js";
 
 
-
+// The app will always look the same - three side-by-side plots.
+// SCATTERPLOT, quasi-CONTOURPLOT (really a lineplot), LINEPLOT
+let container = document.getElementById("plotcontainer");
 
 
 
@@ -9,9 +12,21 @@ import dragDropHandler from "./support/dragDropHandler.js";
 var data = undefined;
 
 
+
+
+
+let sp = new scatterplot();
+container.appendChild(sp.node);
+sp.update();
+
+
+console.log(sp);
+
+
+
 // Updatethe app.
 function update(){
-	console.log("Update the app.", data)
+	sp.update( data );
 } // update
 
 
@@ -24,7 +39,7 @@ function update(){
 
 
 
-
+// ADD DRAG AND DROP FOR DATA
 
 let dataLoader = new dragDropHandler();
 dataLoader.ondragdropped = function(loadeddata){
@@ -34,9 +49,9 @@ dataLoader.ondragdropped = function(loadeddata){
 } // ondragdropped
 
 // DRAGGING AND DROPPING THE DATA IS A DEVELOPMENT FEATURE.
-let dragDropArea = document.getElementsByTagName("BODY")[0];
+let dragDropArea = document.getElementById("dragAndDrop");
 dragDropArea.ondrop = (ev)=>{dataLoader.ondrop(ev)};
 dragDropArea.ondragover = (ev)=>{dataLoader.ondragover(ev)};
 
 // Dev test dataset.
-dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95.json"]);
+dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_2.json"]);

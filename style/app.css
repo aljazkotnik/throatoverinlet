@@ -2,6 +2,7 @@ html, body{
 	overflow:hidden;
 	margin:0px;
 	padding:0px;
+	height: 100%;
 }
 
 * {
@@ -30,4 +31,14 @@ h1 {
     -ms-user-select:none;
     -o-user-select:none;
     user-select:none;
+}
+
+
+/* Menus */
+li {
+  cursor: pointer
+}
+
+.hover-highlight:hover {
+	font-size: 15px;
 }
