@@ -115,7 +115,7 @@ export default class scatterplot extends plotframe{
 			  .attr("cy", d=>yaxis.getdrawvalue(d.metadata) );
 			
 			// Finally add new circles.
-			let newcircles = circles.enter()
+			circles.enter()
 			  .append("circle")
 			    .attr("r", 5)
 			    .attr("fill", c.color)
@@ -125,7 +125,7 @@ export default class scatterplot extends plotframe{
 					d3.select(e.target)
 					  .attr("fill", c.color)
 					  .attr("r", 8);
-					console.log("fire cross plot events")
+					obj.onitemmouseover(d);
 				})
 				.on("mouseout", (e,d)=>{
 					d3.select(e.target)
@@ -139,6 +139,10 @@ export default class scatterplot extends plotframe{
 		
 	} // draw
 	
+	
+	onitemmouseover(d){
+		// dummy function.
+	} // onitemmouseover
 	
 	
 	

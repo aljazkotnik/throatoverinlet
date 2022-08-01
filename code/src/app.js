@@ -1,6 +1,6 @@
 import dragDropHandler from "./support/dragDropHandler.js";
 import scatterplot from "./plots/scatterplot.js";
-
+import linecontourplot from "./plots/linecontourplot.js";
 
 // The app will always look the same - three side-by-side plots.
 // SCATTERPLOT, quasi-CONTOURPLOT (really a lineplot), LINEPLOT
@@ -20,15 +20,24 @@ container.appendChild(sp.node);
 sp.update();
 
 
-console.log(sp);
+let lc = new linecontourplot();
+container.appendChild(lc.node);
+lc.update();
+
+console.log(sp, lc);
 
 
 
 // Updatethe app.
 function update(){
 	sp.update( data );
+	lc.update( data );
 } // update
 
+
+sp.onitemmouseover = function(d){
+	lc.draw(d);
+} // onitemmouseover
 
 
 
