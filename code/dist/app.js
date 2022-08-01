@@ -5436,7 +5436,7 @@
   // DRAGGING AND DROPPING THE DATA IS A DEVELOPMENT FEATURE.
 
 
-  var dragDropArea = document.getElementById("dragAndDrop");
+  var dragDropArea = document.getElementsByTagName("body")[0];
 
   dragDropArea.ondrop = function (ev) {
     dataLoader.ondrop(ev);
@@ -5445,9 +5445,7 @@
   dragDropArea.ondragover = function (ev) {
     dataLoader.ondragover(ev);
   }; // Dev test dataset.
-
-
-  dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_2.json"]);
+  // dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_2.json"]);
 
 }());
 //# sourceMappingURL=app.js.map
