@@ -5575,60 +5575,100 @@
       value: function update(tasks) {
         // Update this plot.
         var obj = this;
-        var variables;
 
         if (tasks) {
-          obj.tasks = tasks; // Line contour plots are fully predefined. However the data for the contours need to be processed from the matlab format to something geared towards d3 plotting. This then also allows the necessary data range extents to be calculated.
-
-          /*
-          C - one passage contour
-          c_pitch - second passage contour
-          xrt - aerofoil
-          */
-
-          var x_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
-          var y_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
-          obj.tasks.forEach(function (t) {
-            var passage0 = matlabContour2drawLines(t.contour.C);
-            var passage1 = matlabContour2drawLines(t.contour.C_pitch);
-            var flow_lines = passage0.concat(passage1);
-            flow_lines.forEach(function (line) {
-              line.color = "cornflowerblue";
-            });
-            var aerofoil_lines = [{
-              level: "aerofoil",
-              points: t.contour.xrt,
-              color: "black"
-            }]; // calculate the extents
-
-            t.contour.lineconfigs = flow_lines.concat(aerofoil_lines);
-            t.contour.lineconfigs.forEach(function (line) {
-              line.points.forEach(function (p) {
-                x_extent[0] = x_extent[0] < p[0] ? x_extent[0] : p[0];
-                x_extent[1] = x_extent[1] > p[0] ? x_extent[1] : p[0];
-                y_extent[0] = y_extent[0] < p[1] ? y_extent[0] : p[1];
-                y_extent[1] = y_extent[1] > p[1] ? y_extent[1] : p[1];
-              }); // forEach
-            }); // forEach
-          });
-          var xVariable = new variableobj({
-            name: "x",
-            extent: x_extent
-          });
-          var yVariable = new variableobj({
-            name: "y",
-            extent: y_extent
-          }); // First update the menu current selection, so that whenthe items are updated the current option will be automatically assigned.
-
-          obj.svgobj.x.menu.current = xVariable;
-          obj.svgobj.y.menu.current = yVariable;
-          obj.svgobj.x.update([xVariable]);
-          obj.svgobj.y.update([yVariable]);
+          obj.tasks = tasks;
+          obj.updatedata();
         } // if
 
 
-        obj.svgobj.update(variables);
+        obj.svgobj.update();
       } // update
+
+    }, {
+      key: "updatedata",
+      value: function updatedata() {
+        var obj = this; // Line contour plots are fully predefined. However the data for the contours need to be processed from the matlab format to something geared towards d3 plotting. This then also allows the necessary data range extents to be calculated.
+
+        /*
+        C - one passage contour
+        c_pitch - second passage contour
+        xrt - aerofoil
+        */
+        // NOTE THAT THE PLOT ASPECT RATIO MUST BE CHANGED GIVEN THE DATA!! Height is prescribed.
+
+        var x_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+        var y_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+        obj.tasks.forEach(function (t) {
+          var passage0 = matlabContour2drawLines(t.contour.C);
+          var passage1 = matlabContour2drawLines(t.contour.C_pitch);
+          var flow_lines = passage0.concat(passage1);
+          flow_lines.forEach(function (line) {
+            line.color = "cornflowerblue";
+          });
+          var custom_lines = [{
+            level: "aerofoil",
+            points: t.contour.xrt,
+            color: "black"
+          }, {
+            level: "aerofoil",
+            points: t.contour.xrt_neg_pitch,
+            color: "black"
+          }, {
+            level: "aerofoil",
+            points: t.contour.xrt_pos_pitch,
+            color: "black"
+          }, {
+            level: "throat_bl",
+            points: t.contour.xrt_throat_bl,
+            color: "blue-green"
+          }, {
+            level: "stag_line",
+            points: t.contour.xrt_throat_bl,
+            color: "gainsboro"
+          }, {
+            level: "bl",
+            points: t.contour.bl,
+            color: "gainsboro"
+          }]; // calculate the extents
+
+          t.contour.lineconfigs = flow_lines.concat(custom_lines);
+          t.contour.lineconfigs.forEach(function (line) {
+            line.points.forEach(function (p) {
+              x_extent[0] = x_extent[0] < p[0] ? x_extent[0] : p[0];
+              x_extent[1] = x_extent[1] > p[0] ? x_extent[1] : p[0];
+              y_extent[0] = y_extent[0] < p[1] ? y_extent[0] : p[1];
+              y_extent[1] = y_extent[1] > p[1] ? y_extent[1] : p[1];
+            }); // forEach
+          }); // forEach
+        }); // Control the plot aspect ratio by controlling the extents. Always try to keep hte data in the middle.
+        // Try to scale the plot to fit the aspect ratio??
+
+        var y_range = y_extent[1] - y_extent[0];
+        var x_range = x_extent[1] - x_extent[0];
+
+        if (x_range > y_range) {
+          // Readjust y_extent.
+          y_extent = [y_extent[0] + y_range / 2 - x_range / 2, y_extent[0] + y_range / 2 + x_range / 2];
+        } else {
+          x_extent = [x_extent[0] + x_range / 2 - y_range / 2, x_extent[0] + x_range / 2 + y_range / 2];
+        } // if
+
+
+        var xVariable = new variableobj({
+          name: "x",
+          extent: x_extent
+        });
+        var yVariable = new variableobj({
+          name: "y",
+          extent: y_extent
+        }); // First update the menu current selection, so that whenthe items are updated the current option will be automatically assigned.
+
+        obj.svgobj.x.menu.current = xVariable;
+        obj.svgobj.y.menu.current = yVariable;
+        obj.svgobj.x.update([xVariable]);
+        obj.svgobj.y.update([yVariable]);
+      } // updatedata
 
     }, {
       key: "draw",
@@ -5752,7 +5792,9 @@
   dragDropArea.ondragover = function (ev) {
     dataLoader.ondragover(ev);
   }; // Dev test dataset.
-  // dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_2.json"]);
+
+
+  dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
 
 }());
 //# sourceMappingURL=app.js.map

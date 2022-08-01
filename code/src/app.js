@@ -63,4 +63,4 @@ dragDropArea.ondrop = (ev)=>{dataLoader.ondrop(ev)};
 dragDropArea.ondragover = (ev)=>{dataLoader.ondragover(ev)};
 
 // Dev test dataset.
-// dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_2.json"]);
+dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
