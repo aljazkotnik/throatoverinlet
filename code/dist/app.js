@@ -5654,6 +5654,8 @@
 
 
         if (d) {
+          // Display the name in the title.
+          obj.node.querySelector("input.card-title").value = d.metadata.name[0];
           var lines = select(obj.node).select("g.data").selectAll("path").data(d.contour.lineconfigs); // First exit.
 
           lines.exit().remove(); // Then update

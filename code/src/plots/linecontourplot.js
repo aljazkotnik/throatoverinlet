@@ -144,6 +144,12 @@ export default class linecontourplot extends plotframe{
 		
 		
 		if(d){
+			
+			
+			// Display the name in the title.
+			obj.node.querySelector("input.card-title").value = d.metadata.name[0];
+			
+			
 				
 			let lines = d3.select(obj.node)
 			  .select("g.data")
