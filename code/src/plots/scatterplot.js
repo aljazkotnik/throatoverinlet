@@ -44,6 +44,10 @@ export default class scatterplot extends plotframe{
 			obj.draw( obj.drawdata );
 		}; // function
 		
+		
+				// Change the initial title
+		obj.node.querySelector("input.card-title").value = "Metadata";
+
 
 	} // constructor
 	
@@ -83,11 +87,18 @@ export default class scatterplot extends plotframe{
 		
 		// Configure all the series that need to be drawn.
 		let config = [
-			{data: obj.svgobj.isConfigured ? obj.tasks : [], gclass: "data", color: "cornflowerblue", highlighted: "orange"},
+			{data: obj.svgobj.isConfigured ? obj.tasks : [], gclass: "data"},
 		];
 		
 		return config
 	} // drawdata
+
+    
+	getcolor(d, defaultcolor){
+		let obj = this;
+		return obj.selecteddatum == d ? "orange" : defaultcolor;
+	}
+
 
 	draw(config){
 		// config:  data, gclass, color, showline.
@@ -96,11 +107,17 @@ export default class scatterplot extends plotframe{
 		
 		
 		
-		
 		let xaxis = obj.svgobj.x;
 		let yaxis = obj.svgobj.y;
 		
 		config.forEach(c=>{
+			
+			
+			function getcolor(d){
+				
+			} // getcolor
+			
+			
 			let circles = d3.select(obj.node)
 			  .select(`g.${ c.gclass }`)
 			  .selectAll("circle")
@@ -111,6 +128,7 @@ export default class scatterplot extends plotframe{
 
 			// Then update
 			circles
+			  .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
 			  .attr("cx", d=>xaxis.getdrawvalue(d.metadata) )
 			  .attr("cy", d=>yaxis.getdrawvalue(d.metadata) );
 			
@@ -118,20 +136,22 @@ export default class scatterplot extends plotframe{
 			circles.enter()
 			  .append("circle")
 			    .attr("r", 5)
-			    .attr("fill", c.color)
+			    .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
 			    .attr("cx", d=>xaxis.getdrawvalue(d.metadata) )
 			    .attr("cy", d=>yaxis.getdrawvalue(d.metadata) )
 				.on("mouseenter", (e,d)=>{
-					d3.select(e.target)
-					  .attr("fill", c.color)
-					  .attr("r", 8);
+					obj.highlight([d]);
 					obj.onitemmouseover(d);
 				})
 				.on("mouseout", (e,d)=>{
-					d3.select(e.target)
-					  .attr("fill", c.color)
-					  .attr("r", 5)
-				});
+					obj.unhighlight();
+					obj.onitemmouseout();
+				})
+				.on("click", (e,d)=>{
+					obj.selecteddatum = obj.selecteddatum == d ? undefined : d;
+					obj.update();
+					obj.onitemselected( obj.selecteddatum );
+				})
 		}) // forEach
 		
 		  
@@ -140,10 +160,60 @@ export default class scatterplot extends plotframe{
 	} // draw
 	
 	
+	highlight(selected){
+		let obj = this;
+		
+		
+		let allpoints = d3.select(obj.node)
+		  .select("g.data")
+		  .selectAll("circle")
+		  .attr("r", 5)
+		  .attr("fill", d=>obj.getcolor(d, "gainsboro"))
+		
+		let selectedpoints = allpoints
+		  .filter(d=>selected.includes(d))
+		  .attr("r", 5)
+		  .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
+		  .raise()
+	} // highlight
+	
+	
+	unhighlight(){
+		let obj = this;
+		
+		d3.select(obj.node)
+		  .select("g.data")
+		  .selectAll("circle")
+		  .attr("r", 5)
+		  .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
+	} // highlight
+	
+	
+	setdatum(selecteddatum){
+		let obj = this;
+		
+		obj.selecteddatum = selecteddatum;
+		
+		d3.select(obj.node)
+		  .select("g.data")
+		  .selectAll("circle")
+		  .filter(d=>selecteddatum==d)
+		  .attr("fill",  d=>obj.getcolor(d, "cornflowerblue"))
+		  .raise()
+	} // setdatum
+	
+	
 	onitemmouseover(d){
 		// dummy function.
 	} // onitemmouseover
 	
 	
+	onitemmouseout(d){
+		// dummy function.
+	} // onitemmouseover
 	
-} // aideScatterPlotModel
+	onitemselected(d){
+		// dummyfunction
+	}
+	
+} // scatterplot

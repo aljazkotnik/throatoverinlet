@@ -1,16 +1,13 @@
 import dragDropHandler from "./support/dragDropHandler.js";
+
 import scatterplot from "./plots/scatterplot.js";
 import linecontourplot from "./plots/linecontourplot.js";
+import linedistributionplot from "./plots/linedistributionplot.js";
+
 
 // The app will always look the same - three side-by-side plots.
 // SCATTERPLOT, quasi-CONTOURPLOT (really a lineplot), LINEPLOT
 let container = document.getElementById("plotcontainer");
-
-
-
-// Instantiate the data.
-var data = undefined;
-
 
 
 
@@ -24,7 +21,20 @@ let lc = new linecontourplot();
 container.appendChild(lc.node);
 lc.update();
 
-console.log(sp, lc);
+
+let lp = new linedistributionplot();
+container.appendChild(lp.node);
+lp.update();
+
+
+
+console.log(sp, lc, lp);
+
+
+
+// Instantiate the data.
+var data = undefined;
+
 
 
 
@@ -32,15 +42,40 @@ console.log(sp, lc);
 function update(){
 	sp.update( data );
 	lc.update( data );
+	lp.update( data );
 } // update
-
 
 sp.onitemmouseover = function(d){
 	lc.draw(d);
+	lp.highlight([d]);
+} // onitemmouseover
+
+sp.onitemmouseout = function(d){
+	lp.unhighlight();
 } // onitemmouseover
 
 
+sp.onitemselected = function(d){
+	lp.setdatum(d);
+	lc.setdatum(d);
+}
 
+
+
+lp.onitemmouseover = function(d){
+	lc.draw(d);
+	sp.highlight([d]);
+} // onitemmouseover
+
+lp.onitemmouseout = function(d){
+	sp.unhighlight();
+} // onitemmouseover
+
+
+lp.onitemselected = function(d){
+	sp.setdatum(d);
+	lc.setdatum(d);
+}
 
 
 

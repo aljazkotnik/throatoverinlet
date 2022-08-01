@@ -26,6 +26,7 @@ let template = `
 export default class linecontourplot extends plotframe{
 	width = 400
 	tasks = []
+	selecteddatum = undefined
 	current = undefined;
 	
 	constructor(){
@@ -45,6 +46,9 @@ export default class linecontourplot extends plotframe{
 			obj.draw( obj.current );
 		}; // function
 		
+		
+		// Change the initial title
+		obj.node.querySelector("input.card-title").value = "Contours";
 
 	} // constructor
 	
@@ -89,9 +93,9 @@ export default class linecontourplot extends plotframe{
 				{level: "aerofoil", points: t.contour.xrt_neg_pitch, color: "black"},
 				{level: "aerofoil", points: t.contour.xrt_pos_pitch, color: "black"},
 				
-				{level: "throat_bl", points: t.contour.xrt_throat_bl, color: "blue-green"},
-				{level: "stag_line", points: t.contour.xrt_throat_bl, color: "gainsboro"},
-				{level: "bl", points: t.contour.bl, color: "gainsboro"}
+				{level: "throat_bl", points: t.contour.xrt_throat_bl, color: "magenta"},
+				{level: "stag_line", points: t.contour.xrt_stag_line, color: "gray"},
+				{level: "bl", points: t.contour.bl, color: "gray"}
 			];
 
 			
@@ -145,70 +149,131 @@ export default class linecontourplot extends plotframe{
 		
 	} // updatedata
 	
-
-	draw(d){
-		// This should only draw a very specific item. But the config is precomputed anyway.
+	
+	
+	getpath(linedata){
 		let obj = this;
-		
-		
-		obj.current = d;
 		
 		
 		let xaxis = obj.svgobj.x;
 		let yaxis = obj.svgobj.y;
 		
+		let p = d3.path();
+		let d = linedata.points;
 		
-		function getpath(linedata){
-			let p = d3.path();
-			let d = linedata.points;
-			
-			p.moveTo( xaxis.scale(d[0][0]), yaxis.scale(d[0][1]) )
-			for(let i=1; i<d.length; i++){
-				p.lineTo( xaxis.scale(d[i][0]), yaxis.scale(d[i][1]) );
-			} // for
-			return p.toString();
-		} // getpath
+		p.moveTo( xaxis.scale(d[0][0]), yaxis.scale(d[0][1]) )
+		for(let i=1; i<d.length; i++){
+			p.lineTo( xaxis.scale(d[i][0]), yaxis.scale(d[i][1]) );
+		} // for
+		
+		return p.toString();
+	} // getpath
+	
+
+	draw(d){
+		// This should only draw a very specific item. But the config is precomputed anyway.
+		let obj = this;
+		
+		obj.current = d;
+		
+		
+		obj.drawcurrent();
+		obj.drawdatum();
+		
+	} // draw
+	
+	
+	drawcurrent(){
+		let obj = this;
 		
 		
 		
-		if(d){
-			
-			
+		if(obj.current){
+
 			// Display the name in the title.
-			obj.node.querySelector("input.card-title").value = d.metadata.name[0];
-			
-			
-				
+			obj.node.querySelector("input.card-title").value = obj.current.metadata.name[0];
+		
+
+
 			let lines = d3.select(obj.node)
 			  .select("g.data")
 			  .selectAll("path")
-			  .data( d.contour.lineconfigs )
+			  .data( obj.current.contour.lineconfigs )
 			  
 			// First exit.
 			lines.exit().remove();
 
 			// Then update
 			lines
-			  .attr("d", d=>getpath(d))
+			  .attr("d", d=>obj.getpath(d))
 			  .attr("stroke", d=>d.color)
 			  
 			  
 			// Finally add new lines.
 			lines.enter()
 			  .append("path")
-				.attr("stroke-width", 1)
+				.attr("stroke-width", 2)
 				.attr("stroke", d=>d.color)
 				.attr("fill", "none")
-				.attr("d", d=>getpath(d) )
+				.attr("d", d=>obj.getpath(d) )
+				.on("mouseenter", (e,d)=>{
+					e.target.setAttribute("stroke-width", 4)
+					// Place a label next to the target.
+				})
+				.on("mouseout", (e,d)=>{
+					e.target.setAttribute("stroke-width", 2)
+				}) // on
+		} // if
 			
+	} // drawcurrent
+	
+	
+	drawdatum(){
+		// This should only draw a very specific item. But the config is precomputed anyway.
+		let obj = this;
+		
+		
+		if(obj.selecteddatum){
+				
+			let lines = d3.select(obj.node)
+			  .select("g.datum")
+			  .selectAll("path")
+			  .data( obj.selecteddatum.contour.lineconfigs )
+			  
+			// First exit.
+			lines.exit().remove();
+
+			// Then update
+			lines
+			  .attr("d", d=>obj.getpath(d))
+			  .attr("stroke", d=>"orange")
+			  
+			  
+			// Finally add new lines.
+			lines.enter()
+			  .append("path")
+				.attr("stroke-width", 2)
+				.attr("stroke", d=>"orange")
+				.attr("fill", "none")
+				.attr("d", d=>obj.getpath(d) )
+				
 			
+		} else {
+			d3.select(obj.node)
+			  .select("g.datum")
+			  .selectAll("path")
+			  .remove()
 		} // if
 		
 		
-	} // draw
+	} // drawdatum
 	
 	
-	
+	setdatum(d){
+		let obj = this;
+		obj.selecteddatum = d;
+		obj.drawdatum();
+	}
 	
 } // linecontourplot
 

@@ -4659,20 +4659,20 @@
     btnDanger: "\n\t  background-color: crimson;\n\t  color: white;\n\t  float: right;\n    "
   }; // css
 
-  var template$5 = "\n\t<div style=\"".concat(css.card, "\">\n\t\t<div class=\"card-header\" style=\"").concat(css.cardHeader, "\">\n\t\t\t<input class=\"card-title\" spellcheck=\"false\"  style=\"").concat(css.plotTitle, "\" value=\"New Plot\">\n\t\t</div>\n\t\t\n\t\t<div class=\"card-body\">\n\t\t\n\t\t</div>\n\t</div>\n"); // template
+  var template$6 = "\n\t<div style=\"".concat(css.card, "\">\n\t\t<div class=\"card-header\" style=\"").concat(css.cardHeader, "\">\n\t\t\t<input class=\"card-title\" spellcheck=\"false\"  style=\"").concat(css.plotTitle, "\" value=\"New Plot\">\n\t\t</div>\n\t\t\n\t\t<div class=\"card-body\">\n\t\t\n\t\t</div>\n\t</div>\n"); // template
 
   var plotframe = function plotframe() {
     _classCallCheck(this, plotframe);
 
     var obj = this;
-    obj.node = html2element(template$5);
+    obj.node = html2element(template$6);
   } // constructor	
   ;
    // plotframe
 
   var variablemenustyle = "\n  background-color: white;\n  border: 2px solid black;\n  border-radius: 5px;\n  display: none; \n  position: absolute;\n  max-height: 120px;\n  overflow-y: auto;\n";
   var ulstyle = "\n  list-style-type: none;\n  font-size: 10px;\n  font-weight: bold;\n  padding-left: 4px;\n  padding-right: 4px;\n";
-  var template$4 = "\n<div class=\"variable-select-menu\" style=\"".concat(variablemenustyle, "\">\n  <ul style=\"").concat(ulstyle, "\">\n  </ul>\n</div>\n"); // Differentite between an x and a y one.
+  var template$5 = "\n<div class=\"variable-select-menu\" style=\"".concat(variablemenustyle, "\">\n  <ul style=\"").concat(ulstyle, "\">\n  </ul>\n</div>\n"); // Differentite between an x and a y one.
 
   var divSelectMenu = /*#__PURE__*/function () {
     function divSelectMenu(axis) {
@@ -4684,7 +4684,7 @@
         extent: [1, 1]
       };
       var obj = this;
-      obj.node = html2element(template$4);
+      obj.node = html2element(template$5);
 
       obj.node.onclick = function (event) {
         return event.stopPropagation();
@@ -4757,7 +4757,7 @@
   var exponenttemplate = "\n<text class=\"linear\" ".concat(textattributes, ">\n\t<tspan>\n\t  x10\n\t  <tspan class=\"exp\" dy=\"-5\"></tspan>\n\t</tspan>\n</text>\n");
   var logtemplate = "\n<text class=\"log\" ".concat(textattributes, " display=\"none\">\n\t<tspan>\n\t  log\n\t  <tspan class=\"base\" dy=\"5\">10</tspan>\n\t  <tspan class=\"eval\" dy=\"-5\">(x)</tspan>\n\t</tspan>\n</text>\n"); // text -> x="-8" / y="-0.32em"
 
-  var template$3 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate, "\n\t\t").concat(logtemplate, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
+  var template$4 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate, "\n\t\t").concat(logtemplate, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
   // Now I need to add in a label saying linear/log
   // DONE!! Maybe a plus/minus next to the axes to increase the axis limits - instead of dragging the labels.
   // The changing between the variables is done in the parent, and not in the axis. This is simply because this class only controls it's own node, and there isn't space to show all the options. Therefore the parent must allocate the space for the change of variables.
@@ -4785,7 +4785,7 @@
 
       var obj = this; // make the axis group.
 
-      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$3);
+      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$4);
       obj.node = obj.d3node.node(); // Get rid of axis by abstracting?
 
       obj.axis = axis;
@@ -5175,7 +5175,7 @@
   exponent  : power exponent (big number labels may overlap otherwise)
   */
 
-  var template$2 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<rect class=\"zoom-area\" fill=\"rgb(255, 255, 255)\" width=\"400\" height=\"400\"></rect>\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n"; // The axis scale needs to have access to the data and to the svg dimensions. Actually not access to the data, but access to the data extent. This has been solved by adding calculated extents to the variable objects.
+  var template$3 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<rect class=\"zoom-area\" fill=\"rgb(255, 255, 255)\" width=\"400\" height=\"400\"></rect>\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n"; // The axis scale needs to have access to the data and to the svg dimensions. Actually not access to the data, but access to the data extent. This has been solved by adding calculated extents to the variable objects.
   // It's best to just pass all the variables to the axis, and let it handle everything connected to it. 
   // This class is a template for two interactive axes svg based plotting.
   // Handle the variable changing here!!!
@@ -5189,7 +5189,7 @@
       this.width = 400;
       this.height = 400;
       var obj = this;
-      obj.node = html2element(template$2); // Make the axis objects, and connect them to the menu selection.
+      obj.node = html2element(template$3); // Make the axis objects, and connect them to the menu selection.
       // `obj.plotbox' specifies the area of the SVG that the chart should be drawn to.
       // Variables must be set later.
 
@@ -5418,7 +5418,7 @@
     return variableobj;
   }(); // variableobj
 
-  var template$1 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"scatterplot\"></div>\n</div>\n";
+  var template$2 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"scatterplot\"></div>\n</div>\n";
 
   var scatterplot = /*#__PURE__*/function (_plotframe) {
     _inherits(scatterplot, _plotframe);
@@ -5438,7 +5438,7 @@
 
 
       var container = obj.node.querySelector("div.card-body");
-      container.appendChild(html2element(template$1)); // Add a scatterplot inset. When initialising already pass in the card size.
+      container.appendChild(html2element(template$2)); // Add a scatterplot inset. When initialising already pass in the card size.
 
       obj.svgobj = new twoInteractiveAxesInset([]);
       container.querySelector("div.scatterplot").appendChild(obj.svgobj.node);
@@ -5446,8 +5446,10 @@
       obj.svgobj.onupdate = function () {
         obj.draw(obj.drawdata);
       }; // function
+      // Change the initial title
 
 
+      obj.node.querySelector("input.card-title").value = "Metadata";
       return _this;
     } // constructor
 
@@ -5487,13 +5489,17 @@
 
         var config = [{
           data: obj.svgobj.isConfigured ? obj.tasks : [],
-          gclass: "data",
-          color: "cornflowerblue",
-          highlighted: "orange"
+          gclass: "data"
         }];
         return config;
       } // drawdata
 
+    }, {
+      key: "getcolor",
+      value: function getcolor(d, defaultcolor) {
+        var obj = this;
+        return obj.selecteddatum == d ? "orange" : defaultcolor;
+      }
     }, {
       key: "draw",
       value: function draw(config) {
@@ -5502,40 +5508,95 @@
         var xaxis = obj.svgobj.x;
         var yaxis = obj.svgobj.y;
         config.forEach(function (c) {
+
+
           var circles = select(obj.node).select("g.".concat(c.gclass)).selectAll("circle").data(c.data); // First exit.
 
           circles.exit().remove(); // Then update
 
-          circles.attr("cx", function (d) {
+          circles.attr("fill", function (d) {
+            return obj.getcolor(d, "cornflowerblue");
+          }).attr("cx", function (d) {
             return xaxis.getdrawvalue(d.metadata);
           }).attr("cy", function (d) {
             return yaxis.getdrawvalue(d.metadata);
           }); // Finally add new circles.
 
-          circles.enter().append("circle").attr("r", 5).attr("fill", c.color).attr("cx", function (d) {
+          circles.enter().append("circle").attr("r", 5).attr("fill", function (d) {
+            return obj.getcolor(d, "cornflowerblue");
+          }).attr("cx", function (d) {
             return xaxis.getdrawvalue(d.metadata);
           }).attr("cy", function (d) {
             return yaxis.getdrawvalue(d.metadata);
           }).on("mouseenter", function (e, d) {
-            select(e.target).attr("fill", c.color).attr("r", 8);
+            obj.highlight([d]);
             obj.onitemmouseover(d);
           }).on("mouseout", function (e, d) {
-            select(e.target).attr("fill", c.color).attr("r", 5);
+            obj.unhighlight();
+            obj.onitemmouseout();
+          }).on("click", function (e, d) {
+            obj.selecteddatum = obj.selecteddatum == d ? undefined : d;
+            obj.update();
+            obj.onitemselected(obj.selecteddatum);
           });
         }); // forEach
       } // draw
+
+    }, {
+      key: "highlight",
+      value: function highlight(selected) {
+        var obj = this;
+        var allpoints = select(obj.node).select("g.data").selectAll("circle").attr("r", 5).attr("fill", function (d) {
+          return obj.getcolor(d, "gainsboro");
+        });
+        allpoints.filter(function (d) {
+          return selected.includes(d);
+        }).attr("r", 5).attr("fill", function (d) {
+          return obj.getcolor(d, "cornflowerblue");
+        }).raise();
+      } // highlight
+
+    }, {
+      key: "unhighlight",
+      value: function unhighlight() {
+        var obj = this;
+        select(obj.node).select("g.data").selectAll("circle").attr("r", 5).attr("fill", function (d) {
+          return obj.getcolor(d, "cornflowerblue");
+        });
+      } // highlight
+
+    }, {
+      key: "setdatum",
+      value: function setdatum(selecteddatum) {
+        var obj = this;
+        obj.selecteddatum = selecteddatum;
+        select(obj.node).select("g.data").selectAll("circle").filter(function (d) {
+          return selecteddatum == d;
+        }).attr("fill", function (d) {
+          return obj.getcolor(d, "cornflowerblue");
+        }).raise();
+      } // setdatum
 
     }, {
       key: "onitemmouseover",
       value: function onitemmouseover(d) {// dummy function.
       } // onitemmouseover
 
+    }, {
+      key: "onitemmouseout",
+      value: function onitemmouseout(d) {// dummy function.
+      } // onitemmouseover
+
+    }, {
+      key: "onitemselected",
+      value: function onitemselected(d) {// dummyfunction
+      }
     }]);
 
     return scatterplot;
-  }(plotframe); // aideScatterPlotModel
+  }(plotframe); // scatterplot
 
-  var template = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"linecontourplot\"></div>\n</div>\n";
+  var template$1 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"linecontourplot\"></div>\n</div>\n";
 
   var linecontourplot = /*#__PURE__*/function (_plotframe) {
     _inherits(linecontourplot, _plotframe);
@@ -5550,13 +5611,14 @@
       _this = _super.call(this);
       _this.width = 400;
       _this.tasks = [];
+      _this.selecteddatum = undefined;
       _this.current = undefined;
 
       var obj = _assertThisInitialized(_this); // Append the plot backbone.
 
 
       var container = obj.node.querySelector("div.card-body");
-      container.appendChild(html2element(template)); // Add a linecontourplot inset. When initialising already pass in the card size.
+      container.appendChild(html2element(template$1)); // Add a linecontourplot inset. When initialising already pass in the card size.
 
       obj.svgobj = new twoInteractiveAxesInset([]);
       container.querySelector("div.linecontourplot").appendChild(obj.svgobj.node);
@@ -5564,8 +5626,10 @@
       obj.svgobj.onupdate = function () {
         obj.draw(obj.current);
       }; // function
+      // Change the initial title
 
 
+      obj.node.querySelector("input.card-title").value = "Contours";
       return _this;
     } // constructor
 
@@ -5621,15 +5685,15 @@
           }, {
             level: "throat_bl",
             points: t.contour.xrt_throat_bl,
-            color: "blue-green"
+            color: "magenta"
           }, {
             level: "stag_line",
-            points: t.contour.xrt_throat_bl,
-            color: "gainsboro"
+            points: t.contour.xrt_stag_line,
+            color: "gray"
           }, {
             level: "bl",
             points: t.contour.bl,
-            color: "gainsboro"
+            color: "gray"
           }]; // calculate the extents
 
           t.contour.lineconfigs = flow_lines.concat(custom_lines);
@@ -5671,50 +5735,99 @@
       } // updatedata
 
     }, {
+      key: "getpath",
+      value: function getpath(linedata) {
+        var obj = this;
+        var xaxis = obj.svgobj.x;
+        var yaxis = obj.svgobj.y;
+        var p = path();
+        var d = linedata.points;
+        p.moveTo(xaxis.scale(d[0][0]), yaxis.scale(d[0][1]));
+
+        for (var i = 1; i < d.length; i++) {
+          p.lineTo(xaxis.scale(d[i][0]), yaxis.scale(d[i][1]));
+        } // for
+
+
+        return p.toString();
+      } // getpath
+
+    }, {
       key: "draw",
       value: function draw(d) {
         // This should only draw a very specific item. But the config is precomputed anyway.
         var obj = this;
         obj.current = d;
-        var xaxis = obj.svgobj.x;
-        var yaxis = obj.svgobj.y;
+        obj.drawcurrent();
+        obj.drawdatum();
+      } // draw
 
-        function getpath(linedata) {
-          var p = path();
-          var d = linedata.points;
-          p.moveTo(xaxis.scale(d[0][0]), yaxis.scale(d[0][1]));
+    }, {
+      key: "drawcurrent",
+      value: function drawcurrent() {
+        var obj = this;
 
-          for (var i = 1; i < d.length; i++) {
-            p.lineTo(xaxis.scale(d[i][0]), yaxis.scale(d[i][1]));
-          } // for
-
-
-          return p.toString();
-        } // getpath
-
-
-        if (d) {
+        if (obj.current) {
           // Display the name in the title.
-          obj.node.querySelector("input.card-title").value = d.metadata.name[0];
-          var lines = select(obj.node).select("g.data").selectAll("path").data(d.contour.lineconfigs); // First exit.
+          obj.node.querySelector("input.card-title").value = obj.current.metadata.name[0];
+          var lines = select(obj.node).select("g.data").selectAll("path").data(obj.current.contour.lineconfigs); // First exit.
 
           lines.exit().remove(); // Then update
 
           lines.attr("d", function (d) {
-            return getpath(d);
+            return obj.getpath(d);
           }).attr("stroke", function (d) {
             return d.color;
           }); // Finally add new lines.
 
-          lines.enter().append("path").attr("stroke-width", 1).attr("stroke", function (d) {
+          lines.enter().append("path").attr("stroke-width", 2).attr("stroke", function (d) {
             return d.color;
           }).attr("fill", "none").attr("d", function (d) {
-            return getpath(d);
-          });
+            return obj.getpath(d);
+          }).on("mouseenter", function (e, d) {
+            e.target.setAttribute("stroke-width", 4); // Place a label next to the target.
+          }).on("mouseout", function (e, d) {
+            e.target.setAttribute("stroke-width", 2);
+          }); // on
         } // if
 
-      } // draw
+      } // drawcurrent
 
+    }, {
+      key: "drawdatum",
+      value: function drawdatum() {
+        // This should only draw a very specific item. But the config is precomputed anyway.
+        var obj = this;
+
+        if (obj.selecteddatum) {
+          var lines = select(obj.node).select("g.datum").selectAll("path").data(obj.selecteddatum.contour.lineconfigs); // First exit.
+
+          lines.exit().remove(); // Then update
+
+          lines.attr("d", function (d) {
+            return obj.getpath(d);
+          }).attr("stroke", function (d) {
+            return "orange";
+          }); // Finally add new lines.
+
+          lines.enter().append("path").attr("stroke-width", 2).attr("stroke", function (d) {
+            return "orange";
+          }).attr("fill", "none").attr("d", function (d) {
+            return obj.getpath(d);
+          });
+        } else {
+          select(obj.node).select("g.datum").selectAll("path").remove();
+        } // if
+
+      } // drawdatum
+
+    }, {
+      key: "setdatum",
+      value: function setdatum(d) {
+        var obj = this;
+        obj.selecteddatum = d;
+        obj.drawdatum();
+      }
     }]);
 
     return linecontourplot;
@@ -5748,29 +5861,289 @@
     return lines;
   } // matlabContour2drawLines
 
+  var template = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"linedistributionplot\"></div>\n</div>\n";
+
+  var linedistributionplot = /*#__PURE__*/function (_plotframe) {
+    _inherits(linedistributionplot, _plotframe);
+
+    var _super = _createSuper(linedistributionplot);
+
+    function linedistributionplot() {
+      var _this;
+
+      _classCallCheck(this, linedistributionplot);
+
+      _this = _super.call(this);
+      _this.width = 400;
+      _this.tasks = [];
+      _this.selecteddatum = undefined;
+
+      var obj = _assertThisInitialized(_this); // Append the plot backbone.
+
+
+      var container = obj.node.querySelector("div.card-body");
+      container.appendChild(html2element(template)); // Add a linedistributionplot inset. When initialising already pass in the card size.
+
+      obj.svgobj = new twoInteractiveAxesInset([]);
+      container.querySelector("div.linedistributionplot").appendChild(obj.svgobj.node);
+
+      obj.svgobj.onupdate = function () {
+        obj.draw(obj.current);
+      }; // function
+      // Change the title
+
+
+      obj.node.querySelector("input.card-title").value = "Distributions";
+      return _this;
+    } // constructor
+
+
+    _createClass(linedistributionplot, [{
+      key: "update",
+      value: function update(tasks) {
+        // Update this plot.
+        var obj = this;
+
+        if (tasks) {
+          obj.tasks = tasks;
+          obj.updatedata();
+        } // if
+
+
+        obj.svgobj.update();
+      } // update
+
+    }, {
+      key: "updatedata",
+      value: function updatedata() {
+        var obj = this; // Line contour plots are fully predefined. However the data for the contours need to be processed from the matlab format to something geared towards d3 plotting. This then also allows the necessary data range extents to be calculated.
+
+        /*
+        C - one passage contour
+        c_pitch - second passage contour
+        xrt - aerofoil
+        */
+        // NOTE THAT THE PLOT ASPECT RATIO MUST BE CHANGED GIVEN THE DATA!! Height is prescribed.
+
+        var x_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+        var y_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+        obj.tasks.forEach(function (t) {
+          var side1 = t.distribution.Mis_1.map(function (v, i) {
+            return [t.distribution.s_1[i], t.distribution.Mis_1[i]];
+          });
+          var side2 = t.distribution.Mis_2.map(function (v, i) {
+            return [t.distribution.s_2[i], t.distribution.Mis_2[i]];
+          }); // A single line is drawn for these.
+
+          var custom_line = {
+            level: "aerofoil",
+            points: side1.concat(side2.reverse()),
+            color: "cornflowerblue"
+          }; // calculate the extents
+
+          t.distribution.lineconfig = custom_line;
+          [t.distribution.lineconfig].forEach(function (line) {
+            line.points.forEach(function (p) {
+              x_extent[0] = x_extent[0] < p[0] ? x_extent[0] : p[0];
+              x_extent[1] = x_extent[1] > p[0] ? x_extent[1] : p[0];
+              y_extent[0] = y_extent[0] < p[1] ? y_extent[0] : p[1];
+              y_extent[1] = y_extent[1] > p[1] ? y_extent[1] : p[1];
+            }); // forEach
+          }); // forEach
+        }); // Control the plot aspect ratio by controlling the extents. Always try to keep hte data in the middle.
+        // Try to scale the plot to fit the aspect ratio??
+
+        var y_range = y_extent[1] - y_extent[0];
+        var x_range = x_extent[1] - x_extent[0];
+
+        if (x_range > y_range) {
+          // Readjust y_extent.
+          y_extent = [y_extent[0] + y_range / 2 - x_range / 2, y_extent[0] + y_range / 2 + x_range / 2];
+        } else {
+          x_extent = [x_extent[0] + x_range / 2 - y_range / 2, x_extent[0] + x_range / 2 + y_range / 2];
+        } // if
+
+
+        var xVariable = new variableobj({
+          name: "s",
+          extent: x_extent
+        });
+        var yVariable = new variableobj({
+          name: "Mis",
+          extent: y_extent
+        }); // First update the menu current selection, so that whenthe items are updated the current option will be automatically assigned.
+
+        obj.svgobj.x.menu.current = xVariable;
+        obj.svgobj.y.menu.current = yVariable;
+        obj.svgobj.x.update([xVariable]);
+        obj.svgobj.y.update([yVariable]);
+      } // updatedata
+
+    }, {
+      key: "getcolor",
+      value: function getcolor(d, defaultcolor) {
+        var obj = this;
+        return obj.selecteddatum == d ? "orange" : defaultcolor;
+      }
+    }, {
+      key: "draw",
+      value: function draw(d) {
+        // This draws all lines, and highlights a specific one if asked for it.
+        var obj = this;
+        obj.current = d;
+        var xaxis = obj.svgobj.x;
+        var yaxis = obj.svgobj.y;
+
+        function getpath(linedata) {
+          var p = path();
+          var d = linedata.points;
+          p.moveTo(xaxis.scale(d[0][0]), yaxis.scale(d[0][1]));
+
+          for (var i = 1; i < d.length; i++) {
+            p.lineTo(xaxis.scale(d[i][0]), yaxis.scale(d[i][1]));
+          } // for
+
+
+          return p.toString();
+        } // getpath
+
+
+        var lines = select(obj.node).select("g.data").selectAll("path").data(obj.tasks); // First exit.
+
+        lines.exit().remove(); // Then update
+
+        lines.attr("d", function (d) {
+          return getpath(d.distribution.lineconfig);
+        }).attr("stroke", function (d) {
+          return obj.getcolor(d, d.distribution.lineconfig.color);
+        }); // Finally add new lines.
+
+        lines.enter().append("path").attr("stroke-width", 2).attr("stroke", function (d) {
+          return obj.getcolor(d, d.distribution.lineconfig.color);
+        }).attr("fill", "none").attr("d", function (d) {
+          return getpath(d.distribution.lineconfig);
+        }).on("mouseenter", function (e, d) {
+          // Place a label next to the target.
+          obj.highlight([d]);
+          obj.onitemmouseover(d);
+        }).on("mouseout", function (e, d) {
+          obj.unhighlight();
+          obj.onitemmouseout();
+        }).on("click", function (e, d) {
+          obj.selecteddatum = obj.selecteddatum == d ? undefined : d;
+          obj.update();
+          obj.onitemselected(obj.selecteddatum);
+        });
+      } // draw
+
+    }, {
+      key: "highlight",
+      value: function highlight(selected) {
+        var obj = this;
+        var alllines = select(obj.node).select("g.data").selectAll("path").attr("stroke", function (d) {
+          return obj.getcolor(d, "gainsboro");
+        }).attr("stroke-width", 2);
+        alllines.filter(function (d) {
+          return selected.includes(d);
+        }).attr("stroke", function (d) {
+          return obj.getcolor(d, d.distribution.lineconfig.color);
+        }).attr("stroke-width", 4).raise();
+      } // highlight
+
+    }, {
+      key: "unhighlight",
+      value: function unhighlight() {
+        var obj = this;
+        select(obj.node).select("g.data").selectAll("path").attr("stroke", function (d) {
+          return obj.getcolor(d, d.distribution.lineconfig.color);
+        }).attr("stroke-width", 2);
+      } // highlight
+
+    }, {
+      key: "setdatum",
+      value: function setdatum(selecteddatum) {
+        var obj = this;
+        obj.selecteddatum = selecteddatum;
+        select(obj.node).select("g.data").selectAll("path").filter(function (d) {
+          return selecteddatum == d;
+        }).attr("stroke", function (d) {
+          return obj.getcolor(d, d.distribution.lineconfig.color);
+        }).attr("stroke-width", 4).raise();
+      } // setdatum
+
+    }, {
+      key: "onitemmouseover",
+      value: function onitemmouseover(d) {// dummy function.
+      } // onitemmouseover
+
+    }, {
+      key: "onitemmouseout",
+      value: function onitemmouseout(d) {// dummy function.
+      } // onitemmouseover
+
+    }, {
+      key: "onitemselected",
+      value: function onitemselected(d) {// dummyfunction
+      }
+    }]);
+
+    return linedistributionplot;
+  }(plotframe); // linedistributionplot
+
   // SCATTERPLOT, quasi-CONTOURPLOT (really a lineplot), LINEPLOT
 
-  var container = document.getElementById("plotcontainer"); // Instantiate the data.
-
-  var data = undefined;
+  var container = document.getElementById("plotcontainer");
   var sp = new scatterplot();
   container.appendChild(sp.node);
   sp.update();
   var lc = new linecontourplot();
   container.appendChild(lc.node);
   lc.update();
-  console.log(sp, lc); // Updatethe app.
+  var lp = new linedistributionplot();
+  container.appendChild(lp.node);
+  lp.update();
+  console.log(sp, lc, lp); // Instantiate the data.
+
+  var data = undefined; // Updatethe app.
 
   function update() {
     sp.update(data);
     lc.update(data);
+    lp.update(data);
   } // update
 
 
   sp.onitemmouseover = function (d) {
     lc.draw(d);
+    lp.highlight([d]);
   }; // onitemmouseover
-  // ADD DRAG AND DROP FOR DATA
+
+
+  sp.onitemmouseout = function (d) {
+    lp.unhighlight();
+  }; // onitemmouseover
+
+
+  sp.onitemselected = function (d) {
+    lp.setdatum(d);
+    lc.setdatum(d);
+  };
+
+  lp.onitemmouseover = function (d) {
+    lc.draw(d);
+    sp.highlight([d]);
+  }; // onitemmouseover
+
+
+  lp.onitemmouseout = function (d) {
+    sp.unhighlight();
+  }; // onitemmouseover
+
+
+  lp.onitemselected = function (d) {
+    sp.setdatum(d);
+    lc.setdatum(d);
+  }; // ADD DRAG AND DROP FOR DATA
 
 
   var dataLoader = new dragDropHandler();
