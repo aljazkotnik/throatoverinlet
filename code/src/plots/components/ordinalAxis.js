@@ -99,13 +99,20 @@ export default class ordinalAxis{
 		
 		// Add the functionality to the domain change.
 		let controls = obj.d3node.select("g.domain-controls");
-		controls.select("text.plus").on("click", ()=>{obj.plusdomain()})
-		controls.select("text.minus").on("click", ()=>{obj.minusdomain()})
+		controls.select("text.plus").on("click", ()=>{
+			obj.plusdomain();
+			obj.update();
+		})
+		controls.select("text.minus").on("click", ()=>{
+			obj.minusdomain();
+			obj.update();
+		})
 		
 		// Add teh functionality to toggle the axis type.
 		let exponent = obj.d3node.select("g.model-controls");
 		exponent.on("click", ()=>{
 			obj.incrementtype();
+			obj.update();
 		})
 		
 		
@@ -304,15 +311,21 @@ export default class ordinalAxis{
 		
 	} // tickformat
 	
-	getdrawvalue(d){
+	
+	getdrawvalue(t){
+		// Given a task return its coordinate.
+		
 		// This is just implemented for more strict control of wht this axis can do. It's not strictly needed because the scale underneath is not being changed.
 		
 		// Needs the current object as it evaluates the incoming value using the current scale.
 		let obj = this;
 		
+		let v = obj.variable.getvalue(t);
+		
+		
 		// Return only the value of the current axis selection. Also, if the data doesn't have the appropriate attribute, then position hte point off screen instead of returning undefined. Will this break if viewPort is adjusted?
-		let v = obj.scale( d[obj.variable.name] )
-		return v ? v : -10
+		let dv = obj.scale( v );
+		return dv ? dv : -10
 		
 	} // getdrawvalue
 	

@@ -23,21 +23,6 @@
     return Constructor;
   }
 
-  function _defineProperty(obj, key, value) {
-    if (key in obj) {
-      Object.defineProperty(obj, key, {
-        value: value,
-        enumerable: true,
-        configurable: true,
-        writable: true
-      });
-    } else {
-      obj[key] = value;
-    }
-
-    return obj;
-  }
-
   function _inherits(subClass, superClass) {
     if (typeof superClass !== "function" && superClass !== null) {
       throw new TypeError("Super expression must either be null or a function");
@@ -4680,14 +4665,17 @@
       var controls = obj.d3node.select("g.domain-controls");
       controls.select("text.plus").on("click", function () {
         obj.plusdomain();
+        obj.update();
       });
       controls.select("text.minus").on("click", function () {
         obj.minusdomain();
+        obj.update();
       }); // Add teh functionality to toggle the axis type.
 
       var exponent = obj.d3node.select("g.model-controls");
       exponent.on("click", function () {
         obj.incrementtype();
+        obj.update();
       }); // Add the menu that will be associated with this axis.
 
       obj.menu = new divSelectMenu();
@@ -4845,13 +4833,15 @@
 
     }, {
       key: "getdrawvalue",
-      value: function getdrawvalue(d) {
+      value: function getdrawvalue(t) {
+        // Given a task return its coordinate.
         // This is just implemented for more strict control of wht this axis can do. It's not strictly needed because the scale underneath is not being changed.
         // Needs the current object as it evaluates the incoming value using the current scale.
-        var obj = this; // Return only the value of the current axis selection. Also, if the data doesn't have the appropriate attribute, then position hte point off screen instead of returning undefined. Will this break if viewPort is adjusted?
+        var obj = this;
+        var v = obj.variable.getvalue(t); // Return only the value of the current axis selection. Also, if the data doesn't have the appropriate attribute, then position hte point off screen instead of returning undefined. Will this break if viewPort is adjusted?
 
-        var v = obj.scale(d[obj.variable.name]);
-        return v ? v : -10;
+        var dv = obj.scale(v);
+        return dv ? dv : -10;
       } // getdrawvalue
       // Getting values required to setup the scales.
 
@@ -5130,6 +5120,14 @@
         };
         return plot;
       } // plotbox
+
+    }, {
+      key: "isConfigured",
+      get: function get() {
+        var obj = this; // At the beginning the plot starts empty.
+
+        return obj.x.variable.name != undefined && obj.y.variable.name != undefined;
+      } // isConfigured
       // Maybe this can be an external module? But it depends directly on how the axis are specified - minimum reusability.
 
     }, {
@@ -5170,6 +5168,7 @@
             obj.x.setdomain(xdomain);
             var ydomain = obj.y.scale.range().map(dt.invertY, dt).map(obj.y.scale.invert, obj.y.scale);
             obj.y.setdomain(ydomain);
+            obj.update();
           } // if
 
         } // zoomed
@@ -5358,27 +5357,11 @@
         var obj = this; // Configure all the series that need to be drawn.
 
         var config = [{
-          data: [],
+          data: obj.svgobj.isConfigured ? obj.tasks : [],
           gclass: "data",
-          color: "cornflowerblue"
-        }]; // Should also be run with no options 
-
-        var xvar = obj.svgobj.x.variable;
-        var yvar = obj.svgobj.y.variable; // At the beginning the plot starts empty.
-
-        var isPlotConfigured = xvar.name != undefined && yvar.name != undefined; // This map means that the data will be duplicated. Maybe only get out the data that actually needs to be plotted?
-
-        if (isPlotConfigured) {
-          var originalPoints = obj.tasks.map(function (task) {
-            var _ref;
-
-            return _ref = {}, _defineProperty(_ref, xvar.name, xvar.getvalue(task.metadata)), _defineProperty(_ref, yvar.name, yvar.getvalue(task.metadata)), _ref;
-          }); // map
-
-          config[0].data = originalPoints;
-        } // if
-
-
+          color: "cornflowerblue",
+          highlighted: "orange"
+        }];
         return config;
       } // drawdata
 
@@ -5390,19 +5373,27 @@
         var xaxis = obj.svgobj.x;
         var yaxis = obj.svgobj.y;
         config.forEach(function (c) {
-          var circles = select(obj.node).select("g.".concat(c.gclass)).selectAll("circle").data(c.data);
-          circles.enter().append("circle").attr("r", 5).attr("fill", c.color).attr("cx", function (d) {
-            return xaxis.getdrawvalue(d);
-          }).attr("cy", function (d) {
-            return yaxis.getdrawvalue(d);
-          });
+          var circles = select(obj.node).select("g.".concat(c.gclass)).selectAll("circle").data(c.data); // First exit.
+
+          circles.exit().remove(); // Then update
+
           circles.attr("cx", function (d) {
-            return xaxis.getdrawvalue(d);
+            return xaxis.getdrawvalue(d.metadata);
           }).attr("cy", function (d) {
-            return yaxis.getdrawvalue(d);
+            return yaxis.getdrawvalue(d.metadata);
+          }); // Finally add new circles.
+
+          circles.enter().append("circle").attr("r", 5).attr("fill", c.color).attr("cx", function (d) {
+            return xaxis.getdrawvalue(d.metadata);
+          }).attr("cy", function (d) {
+            return yaxis.getdrawvalue(d.metadata);
+          }).on("mouseenter", function (e, d) {
+            select(e.target).attr("fill", c.color).attr("r", 8);
+            console.log("fire cross plot events");
+          }).on("mouseout", function (e, d) {
+            select(e.target).attr("fill", c.color).attr("r", 5);
           });
-          circles.exit().remove();
-        });
+        }); // forEach
       } // draw
 
     }]);
@@ -5445,7 +5436,9 @@
   dragDropArea.ondragover = function (ev) {
     dataLoader.ondragover(ev);
   }; // Dev test dataset.
-  // dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_2.json"]);
+
+
+  dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_2.json"]);
 
 }());
 //# sourceMappingURL=app.js.map

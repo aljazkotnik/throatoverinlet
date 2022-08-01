@@ -83,37 +83,8 @@ export default class scatterplot extends plotframe{
 		
 		// Configure all the series that need to be drawn.
 		let config = [
-			{data: [], gclass: "data", color: "cornflowerblue"},
+			{data: obj.svgobj.isConfigured ? obj.tasks : [], gclass: "data", color: "cornflowerblue", highlighted: "orange"},
 		];
-		
-		
-		
-		// Should also be run with no options 
-		let xvar = obj.svgobj.x.variable;
-		let yvar = obj.svgobj.y.variable;
-		
-		
-		
-		// At the beginning the plot starts empty.
-		let isPlotConfigured = (
-			(xvar.name != undefined) &&
-			(yvar.name != undefined)
-		);
-		
-		
-		// This map means that the data will be duplicated. Maybe only get out the data that actually needs to be plotted?
-		if(isPlotConfigured){
-			let originalPoints = obj.tasks.map(task=>{
-				return {
-					[xvar.name]: xvar.getvalue(task.metadata),
-					[yvar.name]: yvar.getvalue(task.metadata)
-				}
-			}) // map
-			
-			config[0].data = originalPoints;
-		} // if
-		 
-		
 		
 		return config
 	} // drawdata
@@ -121,6 +92,10 @@ export default class scatterplot extends plotframe{
 	draw(config){
 		// config:  data, gclass, color, showline.
 		let obj = this;
+		
+		
+		
+		
 		
 		let xaxis = obj.svgobj.x;
 		let yaxis = obj.svgobj.y;
@@ -130,26 +105,41 @@ export default class scatterplot extends plotframe{
 			  .select(`g.${ c.gclass }`)
 			  .selectAll("circle")
 			  .data( c.data )
-			  
-			circles.enter()
-			  .append("circle")
-				  .attr("r", 5)
-				  .attr("fill", c.color)
-				  .attr("cx", d=>xaxis.getdrawvalue(d) )
-				  .attr("cy", d=>yaxis.getdrawvalue(d) );
-				
-			circles
-				  .attr("cx", d=>xaxis.getdrawvalue(d) )
-				  .attr("cy", d=>yaxis.getdrawvalue(d) );
 			
+			// First exit.
 			circles.exit().remove();
+
+			// Then update
+			circles
+			  .attr("cx", d=>xaxis.getdrawvalue(d.metadata) )
+			  .attr("cy", d=>yaxis.getdrawvalue(d.metadata) );
 			
-		})
+			// Finally add new circles.
+			let newcircles = circles.enter()
+			  .append("circle")
+			    .attr("r", 5)
+			    .attr("fill", c.color)
+			    .attr("cx", d=>xaxis.getdrawvalue(d.metadata) )
+			    .attr("cy", d=>yaxis.getdrawvalue(d.metadata) )
+				.on("mouseenter", (e,d)=>{
+					d3.select(e.target)
+					  .attr("fill", c.color)
+					  .attr("r", 8);
+					console.log("fire cross plot events")
+				})
+				.on("mouseout", (e,d)=>{
+					d3.select(e.target)
+					  .attr("fill", c.color)
+					  .attr("r", 5)
+				});
+		}) // forEach
 		
 		  
 		
 		
 	} // draw
+	
+	
 	
 	
 } // aideScatterPlotModel

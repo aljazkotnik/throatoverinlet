@@ -153,7 +153,15 @@ export default class twoInteractiveAxesInset{
 	} // plotbox
 	
 	
-	
+	get isConfigured(){
+		let obj = this;
+		
+		// At the beginning the plot starts empty.
+		return (
+			(obj.x.variable.name != undefined) &&
+			(obj.y.variable.name != undefined)
+		);
+	} // isConfigured
 	
 
 	
@@ -215,6 +223,8 @@ export default class twoInteractiveAxesInset{
 				  .map(dt.invertY, dt)
 				  .map(obj.y.scale.invert, obj.y.scale)
 				obj.y.setdomain( ydomain )
+				
+				obj.update();
 			} // if
 		} // zoomed
 		  
