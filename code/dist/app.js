@@ -5789,6 +5789,7 @@
   }(plotframe); // scatterplot
 
   var template$1 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"linecontourplot\"></div>\n</div>\n";
+  var additional = "\n<input class=\"card-title\" spellcheck=\"false\"  style=\"".concat(css.plotTitle, " color:orange;\" value=\"\">\n");
 
   var linecontourplot = /*#__PURE__*/function (_plotframe) {
     _inherits(linecontourplot, _plotframe);
@@ -5812,7 +5813,10 @@
 
       var obj = _assertThisInitialized(_this);
 
-      obj.data = data; // Append the plot backbone.
+      obj.data = data; // Add another title input.
+
+      var header = obj.node.querySelector("div.card-header");
+      header.appendChild(html2element(additional)); // Append the plot backbone.
 
       var container = obj.node.querySelector("div.card-body");
       container.appendChild(html2element(template$1)); // Add a linecontourplot inset. When initialising already pass in the card size.
@@ -5899,7 +5903,9 @@
 
         if (obj.lastselected) {
           // Display the name in the title.
-          obj.node.querySelector("input.card-title").value = obj.lastselected.metadata.name[0];
+          var titles = obj.node.querySelectorAll("input.card-title");
+          titles[0].value = obj.lastselected.metadata.name[0];
+          titles[1].value = obj.data.datum ? obj.data.datum.metadata.name[0] : "";
           var lines = select(obj.node).select("g.data").selectAll("path").data(obj.lastselected.contour.lineconfigs); // First exit.
 
           lines.exit().remove(); // Then update

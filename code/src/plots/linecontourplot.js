@@ -10,6 +10,9 @@ import twoInteractiveAxesInset from "./components/twoInteractiveAxesInset.js";
 import variableobj from "./components/variableobj.js";
 
 
+// Maybe move the width and height from the CSS into here?
+import {css} from "./components/css.js";
+
 
 // The template can now hold one inset per div let's say. Maybe here I want to include a modelInputVariableSelectionInset and a twoInteractiveAxesInset. The drawing on the svg should be implemented here.
 let template = `
@@ -19,7 +22,9 @@ let template = `
 `
 
 
-
+let additional = `
+<input class="card-title" spellcheck="false"  style="${css.plotTitle} color:orange;" value="">
+`
 
 
 
@@ -37,6 +42,12 @@ export default class linecontourplot extends plotframe{
 		super();
 		let obj = this;
 		obj.data = data;
+		
+		
+		// Add another title input.
+		let header = obj.node.querySelector("div.card-header");
+		header.appendChild(html2element(additional));
+		
 		
 		// Append the plot backbone.
 		let container = obj.node.querySelector("div.card-body");
@@ -125,7 +136,9 @@ export default class linecontourplot extends plotframe{
 		if(obj.lastselected){
 
 			// Display the name in the title.
-			obj.node.querySelector("input.card-title").value = obj.lastselected.metadata.name[0];
+			let titles = obj.node.querySelectorAll("input.card-title");
+			titles[0].value = obj.lastselected.metadata.name[0];
+			titles[1].value = obj.data.datum ? obj.data.datum.metadata.name[0] : "";
 		
 
 
