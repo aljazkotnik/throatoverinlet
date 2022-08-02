@@ -65,12 +65,17 @@ export default class linedistributionplot extends plotframe{
 	} // update
 	
 
-    updatedata(){
+    updatedata(series){
+		// The data is configured on load. The plot only requires the variables to be passed in....
 		let obj = this;
 		
 		
-		let xVariable = new variableobj({name: "s", extent: obj.data.extent.distribution.x});
-		let yVariable = new variableobj({name: "Mis", extent: obj.data.extent.distribution.y});
+		// Selectthe relevant series manually here for now.		
+		obj.accessor = series.accessor;
+		
+		
+		let xVariable = new variableobj({name: "s", extent: series.extent.x});
+		let yVariable = new variableobj({name: series.name, extent: series.extent.y});
 		
 
 		// First update the menu current selection, so that whenthe items are updated the current option will be automatically assigned.
@@ -87,27 +92,30 @@ export default class linedistributionplot extends plotframe{
 	
 	
 	
-	getcolor(d, defaultcolor){
+	getcolor(task, defaultcolor){
 		let obj = this;
 		
 		// If a current is prescribed, then any other ones should be gray.
 		// If a current is prescribed
+		if(!defaultcolor){
+			defaultcolor = obj.accessor(task).color;
+		} // if
 		
-		let c = obj.data.current ? obj.data.current==d ? defaultcolor : "gainsboro" : defaultcolor
-		c = obj.data.datum == d ? "orange" : c
+		let c = obj.data.current ? obj.data.current==task ? defaultcolor : "gainsboro" : defaultcolor
+		c = obj.data.datum == task ? "orange" : c
 		
 		return c;
 	} // getcolor
 	
 	
-	getpath(linedata){
+	getpath(task){
 		let obj = this;
 		
 		let xaxis = obj.svgobj.x;
 		let yaxis = obj.svgobj.y;
 		
 		let p = d3.path();
-		let d = linedata.points;
+		let d = obj.accessor(task).points;
 		
 		p.moveTo( xaxis.scale(d[0][0]), yaxis.scale(d[0][1]) )
 		for(let i=1; i<d.length; i++){
@@ -139,16 +147,20 @@ export default class linedistributionplot extends plotframe{
 					// Place a label next to the target.
 					obj.data.current = d;
 					// When the element is raised it is repositioned the mouseout etc events to be triggered...
-					e.target.parentElement.insertBefore(e.target,null)
+					// e.target.parentElement.insertBefore(e.target,null)
+					// The raising is done in refresh since it has to happen on mouseover on other plots.
+					obj.refresh();
 					obj.data.globalupdate();
 					
 				})
 				.on("mouseout", (e,d)=>{
 					obj.data.current = undefined;
+					obj.refresh();
 					obj.data.globalupdate();
 				})
 				.on("click", (e,d)=>{
 					obj.data.datum = obj.data.datum == d ? undefined : d;
+					obj.refresh();
 					obj.data.globalupdate();
 				})
 
@@ -161,11 +173,28 @@ export default class linedistributionplot extends plotframe{
 	
 	refresh(){
 		let obj = this;
-		d3.select(obj.node)
+		// console.log("refresh")
+		
+		let paths = d3.select(obj.node)
 		  .select("g.data")
-		  .selectAll("path")
-		  .attr("d", d=>obj.getpath(d.distribution.lineconfig))
-		  .attr("stroke", d=>obj.getcolor(d, d.distribution.lineconfig.color))
+		  .selectAll("path");
+		  
+		paths.attr("d", d=>obj.getpath(d))
+		  .attr("stroke", d=>obj.getcolor(d, undefined))
+
+
+		// If there is a current element selected it should be raised.
+		if(obj.data.current || obj.data.datum){
+			paths
+			  .filter(d=>[obj.data.current, obj.data.datum].includes(d))
+			  .each((d,i,el)=>{
+				// When the element is raised it is repositioned the mouseout etc events to be triggered...
+				el[0].parentElement.insertBefore(el[0],null)
+			  })
+		} // if	
+	
+		
+		  
 	} // refresh
 	
 	

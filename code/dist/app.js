@@ -183,6 +183,7 @@
       this.tasks = undefined;
       this.current = undefined;
       this.datum = undefined;
+      this.distributions = undefined;
       this.extent = {
         distribution: undefined,
         contour: undefined
@@ -195,7 +196,7 @@
       value: function settasks(tasks) {
         var obj = this;
         obj.tasks = tasks;
-        obj.extent.distribution = processDistributionData(obj.tasks);
+        obj.distributions = processDistributionData(obj.tasks);
         obj.extent.contour = processContourLines(obj.tasks);
       } // settasks
 
@@ -205,49 +206,80 @@
   }(); // dataStorage
 
   function processDistributionData(tasks) {
-    var x_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
-    var y_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
     tasks.forEach(function (t) {
-      var side1 = t.distribution.Mis_1.map(function (v, i) {
+      // Mach distributon
+      var mach1 = t.distribution.Mis_1.map(function (v, i) {
         return [t.distribution.s_1[i], t.distribution.Mis_1[i]];
       });
-      var side2 = t.distribution.Mis_2.map(function (v, i) {
+      var mach2 = t.distribution.Mis_2.map(function (v, i) {
         return [t.distribution.s_2[i], t.distribution.Mis_2[i]];
-      }); // A single line is drawn for these.
+      });
+      var mach = mach1.concat(mach2.reverse()); // Camber distributions
 
-      var custom_line = {
-        level: "aerofoil",
-        points: side1.concat(side2.reverse()),
-        color: "cornflowerblue"
-      }; // calculate the extents
+      var camber = t.camber.camber.map(function (v, i) {
+        return [t.camber.s_cam[i], t.camber.camber[i]];
+      }); // map
+      // Theta distributions.
 
-      t.distribution.lineconfig = custom_line;
-      [t.distribution.lineconfig].forEach(function (line) {
-        line.points.forEach(function (p) {
-          x_extent[0] = x_extent[0] < p[0] ? x_extent[0] : p[0];
-          x_extent[1] = x_extent[1] > p[0] ? x_extent[1] : p[0];
-          y_extent[0] = y_extent[0] < p[1] ? y_extent[0] : p[1];
-          y_extent[1] = y_extent[1] > p[1] ? y_extent[1] : p[1];
-        }); // forEach
-      }); // forEach
-    }); // Control the plot aspect ratio by controlling the extents. Always try to keep hte data in the middle.
-    // Try to scale the plot to fit the aspect ratio??
+      var theta1 = t.camber.theta_ps.map(function (v, i) {
+        return [t.camber.s_ps[i], t.camber.theta_ps[i]];
+      }); // map
 
-    var y_range = y_extent[1] - y_extent[0];
-    var x_range = x_extent[1] - x_extent[0];
+      var theta2 = t.camber.theta_ss.map(function (v, i) {
+        return [t.camber.s_ss[i], t.camber.theta_ss[i]];
+      }); // map
 
-    if (x_range > y_range) {
-      // Readjust y_extent.
-      y_extent = [y_extent[0] + y_range / 2 - x_range / 2, y_extent[0] + y_range / 2 + x_range / 2];
-    } else {
-      x_extent = [x_extent[0] + x_range / 2 - y_range / 2, x_extent[0] + x_range / 2 + y_range / 2];
-    } // if
+      var theta = theta1.concat(theta2.reverse()); // Create the series that can be plotted
 
+      t.distribution = {
+        mach: {
+          level: t.metadata.name[0],
+          points: mach,
+          color: "cornflowerblue"
+        },
+        camber: {
+          level: t.metadata.name[0],
+          points: camber,
+          color: "cornflowerblue"
+        },
+        theta: {
+          level: t.metadata.name[0],
+          points: theta,
+          color: "cornflowerblue"
+        }
+      }; // distribution
+    }); // forEach
+    // But these should really come in pars no? One per each pair?
 
-    return {
-      x: x_extent,
-      y: y_extent
-    };
+    var plotdata = [{
+      name: "mach",
+      extent: [],
+      accessor: function accessor(d) {
+        return d.distribution["mach"];
+      }
+    }, {
+      name: "camber",
+      extent: [],
+      accessor: function accessor(d) {
+        return d.distribution["camber"];
+      }
+    }, {
+      name: "theta",
+      extent: [],
+      accessor: function accessor(d) {
+        return d.distribution["theta"];
+      }
+    }]; // Calculate the extents here
+
+    plotdata.forEach(function (series) {
+      var ex = extent$1(tasks, function (t) {
+        return t.distribution[series.name];
+      }); // axisequal( ex );
+
+      series.extent = ex;
+    }); // forEach
+
+    return plotdata;
   } // processDistributionData
 
 
@@ -315,6 +347,25 @@
       y: y_extent
     };
   } // processContourLines
+
+
+  function extent$1(tasks, accessor) {
+    var x_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+    var y_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+    tasks.forEach(function (t) {
+      accessor(t).points.forEach(function (p) {
+        x_extent[0] = x_extent[0] < p[0] ? x_extent[0] : p[0];
+        x_extent[1] = x_extent[1] > p[0] ? x_extent[1] : p[0];
+        y_extent[0] = y_extent[0] < p[1] ? y_extent[0] : p[1];
+        y_extent[1] = y_extent[1] > p[1] ? y_extent[1] : p[1];
+      }); // forEach
+    }); // forEach
+
+    return {
+      x: x_extent,
+      y: y_extent
+    };
+  } // extent
 
 
   function matlabContour2drawLines(C) {
@@ -5686,12 +5737,15 @@
 
           circles.enter().append("circle").attr("r", 5).attr("cx", -10).attr("cy", -10).on("mouseenter", function (e, d) {
             obj.data.current = d;
+            obj.refresh();
             obj.data.globalupdate();
           }).on("mouseout", function (e, d) {
             obj.data.current = undefined;
+            obj.refresh();
             obj.data.globalupdate();
           }).on("click", function (e, d) {
             obj.data.datum = obj.data.datum == d ? undefined : d;
+            obj.refresh();
             obj.data.globalupdate();
           });
           obj.refresh();
@@ -5707,13 +5761,24 @@
         if (obj.svgobj.isConfigured) {
           var xaxis = obj.svgobj.x;
           var yaxis = obj.svgobj.y;
-          select(obj.node).select("g.data").selectAll("circle").attr("fill", function (d) {
+          var circles = select(obj.node).select("g.data").selectAll("circle");
+          circles.attr("fill", function (d) {
             return obj.getcolor(d, "cornflowerblue");
           }).attr("cx", function (d) {
             return xaxis.getdrawvalue(d.metadata);
           }).attr("cy", function (d) {
             return yaxis.getdrawvalue(d.metadata);
-          });
+          }); // If there is a current element selected it should be raised.
+
+          if (obj.data.current || obj.data.datum) {
+            circles.filter(function (d) {
+              return [obj.data.current, obj.data.datum].includes(d);
+            }).each(function (d, i, el) {
+              // When the element is raised it is repositioned the mouseout etc events to be triggered...
+              el[0].parentElement.insertBefore(el[0], null);
+            });
+          } // if	
+
         } // if
 
       } // refresh
@@ -5979,15 +6044,18 @@
 
     }, {
       key: "updatedata",
-      value: function updatedata() {
-        var obj = this;
+      value: function updatedata(series) {
+        // The data is configured on load. The plot only requires the variables to be passed in....
+        var obj = this; // Selectthe relevant series manually here for now.		
+
+        obj.accessor = series.accessor;
         var xVariable = new variableobj({
           name: "s",
-          extent: obj.data.extent.distribution.x
+          extent: series.extent.x
         });
         var yVariable = new variableobj({
-          name: "Mis",
-          extent: obj.data.extent.distribution.y
+          name: series.name,
+          extent: series.extent.y
         }); // First update the menu current selection, so that whenthe items are updated the current option will be automatically assigned.
 
         obj.svgobj.x.menu.current = xVariable;
@@ -5999,23 +6067,28 @@
 
     }, {
       key: "getcolor",
-      value: function getcolor(d, defaultcolor) {
+      value: function getcolor(task, defaultcolor) {
         var obj = this; // If a current is prescribed, then any other ones should be gray.
         // If a current is prescribed
 
-        var c = obj.data.current ? obj.data.current == d ? defaultcolor : "gainsboro" : defaultcolor;
-        c = obj.data.datum == d ? "orange" : c;
+        if (!defaultcolor) {
+          defaultcolor = obj.accessor(task).color;
+        } // if
+
+
+        var c = obj.data.current ? obj.data.current == task ? defaultcolor : "gainsboro" : defaultcolor;
+        c = obj.data.datum == task ? "orange" : c;
         return c;
       } // getcolor
 
     }, {
       key: "getpath",
-      value: function getpath(linedata) {
+      value: function getpath(task) {
         var obj = this;
         var xaxis = obj.svgobj.x;
         var yaxis = obj.svgobj.y;
         var p = path();
-        var d = linedata.points;
+        var d = obj.accessor(task).points;
         p.moveTo(xaxis.scale(d[0][0]), yaxis.scale(d[0][1]));
 
         for (var i = 1; i < d.length; i++) {
@@ -6040,14 +6113,18 @@
           lines.enter().append("path").attr("stroke-width", 2).attr("fill", "none").on("mouseenter", function (e, d) {
             // Place a label next to the target.
             obj.data.current = d; // When the element is raised it is repositioned the mouseout etc events to be triggered...
+            // e.target.parentElement.insertBefore(e.target,null)
+            // The raising is done in refresh since it has to happen on mouseover on other plots.
 
-            e.target.parentElement.insertBefore(e.target, null);
+            obj.refresh();
             obj.data.globalupdate();
           }).on("mouseout", function (e, d) {
             obj.data.current = undefined;
+            obj.refresh();
             obj.data.globalupdate();
           }).on("click", function (e, d) {
             obj.data.datum = obj.data.datum == d ? undefined : d;
+            obj.refresh();
             obj.data.globalupdate();
           });
           obj.refresh();
@@ -6058,12 +6135,24 @@
     }, {
       key: "refresh",
       value: function refresh() {
-        var obj = this;
-        select(obj.node).select("g.data").selectAll("path").attr("d", function (d) {
-          return obj.getpath(d.distribution.lineconfig);
+        var obj = this; // console.log("refresh")
+
+        var paths = select(obj.node).select("g.data").selectAll("path");
+        paths.attr("d", function (d) {
+          return obj.getpath(d);
         }).attr("stroke", function (d) {
-          return obj.getcolor(d, d.distribution.lineconfig.color);
-        });
+          return obj.getcolor(d, undefined);
+        }); // If there is a current element selected it should be raised.
+
+        if (obj.data.current || obj.data.datum) {
+          paths.filter(function (d) {
+            return [obj.data.current, obj.data.datum].includes(d);
+          }).each(function (d, i, el) {
+            // When the element is raised it is repositioned the mouseout etc events to be triggered...
+            el[0].parentElement.insertBefore(el[0], null);
+          });
+        } // if	
+
       } // refresh
 
     }]);
@@ -6093,20 +6182,31 @@
   container.appendChild(lc.node);
   lc.update();
   plots.push(lc);
-  var lp = new linedistributionplot(data);
-  container.appendChild(lp.node);
-  lp.update();
-  plots.push(lp);
+  var lp_mach = new linedistributionplot(data);
+  container.appendChild(lp_mach.node);
+  lp_mach.update();
+  plots.push(lp_mach);
+  var lp_camber = new linedistributionplot(data);
+  container.appendChild(lp_camber.node);
+  lp_camber.update();
+  plots.push(lp_camber);
+  var lp_theta = new linedistributionplot(data);
+  container.appendChild(lp_theta.node);
+  lp_theta.update();
+  plots.push(lp_theta);
   console.log(data, plots); // ADD DRAG AND DROP FOR DATA
 
   var dataLoader = new dragDropHandler();
 
   dataLoader.ondragdropped = function (loadeddata) {
     // This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
-    data.settasks(loadeddata);
-    plots.forEach(function (p) {
-      return p.updatedata();
-    });
+    data.settasks(loadeddata); // Load the data in and assign the series.
+
+    sp.updatedata();
+    lc.updatedata();
+    lp_mach.updatedata(data.distributions[0]);
+    lp_camber.updatedata(data.distributions[1]);
+    lp_theta.updatedata(data.distributions[2]);
     data.globalupdate();
   }; // ondragdropped
   // DRAGGING AND DROPPING THE DATA IS A DEVELOPMENT FEATURE.
@@ -6121,9 +6221,7 @@
   dragDropArea.ondragover = function (ev) {
     dataLoader.ondragover(ev);
   }; // Dev test dataset.
-
-
-  dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
+  // dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
 
 }());
 //# sourceMappingURL=app.js.map

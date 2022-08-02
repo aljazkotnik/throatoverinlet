@@ -124,15 +124,18 @@ export default class scatterplot extends plotframe{
 				.attr("cy", -10)
 				.on("mouseenter", (e,d)=>{
 					obj.data.current = d;
+					obj.refresh();
 					obj.data.globalupdate();
 				})
 				.on("mouseout", (e,d)=>{
 					obj.data.current = undefined;
+					obj.refresh();
 					obj.data.globalupdate();
 					
 				})
 				.on("click", (e,d)=>{
 					obj.data.datum = obj.data.datum == d ? undefined : d;
+					obj.refresh();
 					obj.data.globalupdate();
 				})
 			
@@ -151,12 +154,25 @@ export default class scatterplot extends plotframe{
 			let xaxis = obj.svgobj.x;
 			let yaxis = obj.svgobj.y;
 			
-			d3.select(obj.node)
+			let circles = d3.select(obj.node)
 			  .select("g.data")
 			  .selectAll("circle")
+			  
+			circles
 			  .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
 			  .attr("cx", d=>xaxis.getdrawvalue(d.metadata) )
 			  .attr("cy", d=>yaxis.getdrawvalue(d.metadata) ); 
+			  
+			  
+			// If there is a current element selected it should be raised.
+			if(obj.data.current || obj.data.datum){
+				circles
+				  .filter(d=>[obj.data.current, obj.data.datum].includes(d))
+				  .each((d,i,el)=>{
+					// When the element is raised it is repositioned the mouseout etc events to be triggered...
+					el[0].parentElement.insertBefore(el[0],null)
+				  })
+			} // if	
 		  
 		} // if
 	} // refresh

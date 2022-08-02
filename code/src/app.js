@@ -34,10 +34,24 @@ container.appendChild(lc.node);
 lc.update();
 plots.push(lc)
 
-let lp = new linedistributionplot(data);
-container.appendChild(lp.node);
-lp.update();
-plots.push(lp)
+let lp_mach = new linedistributionplot(data);
+container.appendChild(lp_mach.node);
+lp_mach.update();
+plots.push(lp_mach)
+
+
+let lp_camber = new linedistributionplot(data);
+container.appendChild(lp_camber.node);
+lp_camber.update();
+plots.push(lp_camber)
+
+
+let lp_theta = new linedistributionplot(data);
+container.appendChild(lp_theta.node);
+lp_theta.update();
+plots.push(lp_theta)
+
+
 
 
 console.log(data, plots);
@@ -60,7 +74,19 @@ let dataLoader = new dragDropHandler();
 dataLoader.ondragdropped = function(loadeddata){
 	// This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
 	data.settasks(loadeddata);
-	plots.forEach(p=>p.updatedata());
+	
+	
+	// Load the data in and assign the series.
+	sp.updatedata()
+	lc.updatedata()
+	
+	
+	lp_mach.updatedata( data.distributions[0] )
+	lp_camber.updatedata( data.distributions[1] )
+	lp_theta.updatedata( data.distributions[2] )
+	
+
+	
 	data.globalupdate();
 } // ondragdropped
 
@@ -70,4 +96,4 @@ dragDropArea.ondrop = (ev)=>{dataLoader.ondrop(ev)};
 dragDropArea.ondragover = (ev)=>{dataLoader.ondragover(ev)};
 
 // Dev test dataset.
-dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
+// dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
