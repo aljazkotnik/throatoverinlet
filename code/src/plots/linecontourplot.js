@@ -25,14 +25,17 @@ let template = `
 
 export default class linecontourplot extends plotframe{
 	width = 400
-	tasks = []
-	selecteddatum = undefined
-	current = undefined;
+	data = {
+		current: undefined,
+		datum: undefined,
+		tasks: undefined
+	}
+	lastselected = undefined
 	
-	constructor(){
+	constructor(data){
 		super();
 		let obj = this;
-		
+		obj.data = data;
 		
 		// Append the plot backbone.
 		let container = obj.node.querySelector("div.card-body");
@@ -43,7 +46,7 @@ export default class linecontourplot extends plotframe{
 		obj.svgobj = new twoInteractiveAxesInset([]);
 		container.querySelector("div.linecontourplot").appendChild(obj.svgobj.node);
 		obj.svgobj.onupdate = function(){
-			obj.draw( obj.current );
+			obj.draw();
 		}; // function
 		
 		
@@ -52,92 +55,21 @@ export default class linecontourplot extends plotframe{
 
 	} // constructor
 	
-	update(tasks){
+	update(){
 		// Update this plot.
 		let obj = this;
 		
-		
-		
-		if(tasks){
-			obj.tasks = tasks;
-			obj.updatedata();
-		} // if
-		
-		
 		obj.svgobj.update();
+		obj.draw();
 	} // update
 	
 
     updatedata(){
 		let obj = this;
-		// Line contour plots are fully predefined. However the data for the contours need to be processed from the matlab format to something geared towards d3 plotting. This then also allows the necessary data range extents to be calculated.
-		/*
-		C - one passage contour
-		c_pitch - second passage contour
-		xrt - aerofoil
-		*/
-		// NOTE THAT THE PLOT ASPECT RATIO MUST BE CHANGED GIVEN THE DATA!! Height is prescribed.
-		
-		let x_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
-		let y_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
-		
-		obj.tasks.forEach(function(t){
-			let passage0 = matlabContour2drawLines( t.contour.C );
-			let passage1 = matlabContour2drawLines( t.contour.C_pitch );
-			
-			let flow_lines = passage0.concat(passage1);
-			
-			flow_lines.forEach(line=>{line.color = "cornflowerblue";});
-			let custom_lines = [
-			    {level: "aerofoil", points: t.contour.xrt, color: "black"},
-				{level: "aerofoil", points: t.contour.xrt_neg_pitch, color: "black"},
-				{level: "aerofoil", points: t.contour.xrt_pos_pitch, color: "black"},
-				
-				{level: "throat_bl", points: t.contour.xrt_throat_bl, color: "magenta"},
-				{level: "stag_line", points: t.contour.xrt_stag_line, color: "gray"},
-				{level: "bl", points: t.contour.bl, color: "gray"}
-			];
 
-			
-			// calculate the extents
-			t.contour.lineconfigs = flow_lines.concat(custom_lines);
-			
-			t.contour.lineconfigs.forEach(line=>{
-				line.points.forEach(p=>{
-					x_extent[0] = x_extent[0] < p[0] ? x_extent[0] : p[0];
-					x_extent[1] = x_extent[1] > p[0] ? x_extent[1] : p[0];
-					
-					y_extent[0] = y_extent[0] < p[1] ? y_extent[0] : p[1];
-					y_extent[1] = y_extent[1] > p[1] ? y_extent[1] : p[1];
-				}) // forEach
-			}) // forEach
-		})
-		
-		
-		
-		
-		// Control the plot aspect ratio by controlling the extents. Always try to keep hte data in the middle.
-		// Try to scale the plot to fit the aspect ratio??
-		let y_range = y_extent[1]-y_extent[0];
-		let x_range = x_extent[1]-x_extent[0];
-		if( x_range > y_range ){
-			// Readjust y_extent.
-			y_extent = [
-			  y_extent[0] + y_range/2 - x_range/2,
-			  y_extent[0] + y_range/2 + x_range/2,
-			]
-		} else {
-			x_extent = [
-			  x_extent[0] + x_range/2 - y_range/2,
-			  x_extent[0] + x_range/2 + y_range/2,
-			]
-		} // if
-		
-		
-		
-		
-		let xVariable = new variableobj({name: "x", extent: x_extent});
-		let yVariable = new variableobj({name: "y", extent: y_extent});
+
+		let xVariable = new variableobj({name: "x", extent: obj.data.extent.contour.x});
+		let yVariable = new variableobj({name: "y", extent: obj.data.extent.contour.y});
 		
 
 		// First update the menu current selection, so that whenthe items are updated the current option will be automatically assigned.
@@ -170,12 +102,9 @@ export default class linecontourplot extends plotframe{
 	} // getpath
 	
 
-	draw(d){
+	draw(){
 		// This should only draw a very specific item. But the config is precomputed anyway.
-		let obj = this;
-		
-		obj.current = d;
-		
+		let obj = this;		
 		
 		obj.drawcurrent();
 		obj.drawdatum();
@@ -188,17 +117,21 @@ export default class linecontourplot extends plotframe{
 		
 		
 		
-		if(obj.current){
+		if(obj.data.current){
+			obj.lastselected = obj.data.current;
+		} // if
+		
+		if(obj.lastselected){
 
 			// Display the name in the title.
-			obj.node.querySelector("input.card-title").value = obj.current.metadata.name[0];
+			obj.node.querySelector("input.card-title").value = obj.lastselected.metadata.name[0];
 		
 
 
 			let lines = d3.select(obj.node)
 			  .select("g.data")
 			  .selectAll("path")
-			  .data( obj.current.contour.lineconfigs )
+			  .data( obj.lastselected.contour.lineconfigs )
 			  
 			// First exit.
 			lines.exit().remove();
@@ -212,16 +145,16 @@ export default class linecontourplot extends plotframe{
 			// Finally add new lines.
 			lines.enter()
 			  .append("path")
-				.attr("stroke-width", 2)
+				.attr("stroke-width", 1)
 				.attr("stroke", d=>d.color)
 				.attr("fill", "none")
 				.attr("d", d=>obj.getpath(d) )
 				.on("mouseenter", (e,d)=>{
-					e.target.setAttribute("stroke-width", 4)
-					// Place a label next to the target.
+					e.target.setAttribute("stroke-width", 2)
+					console.log("show tooltip")
 				})
 				.on("mouseout", (e,d)=>{
-					e.target.setAttribute("stroke-width", 2)
+					e.target.setAttribute("stroke-width", 1)
 				}) // on
 		} // if
 			
@@ -233,12 +166,12 @@ export default class linecontourplot extends plotframe{
 		let obj = this;
 		
 		
-		if(obj.selecteddatum){
+		if(obj.data.datum){
 				
 			let lines = d3.select(obj.node)
 			  .select("g.datum")
 			  .selectAll("path")
-			  .data( obj.selecteddatum.contour.lineconfigs )
+			  .data( obj.data.datum.contour.lineconfigs )
 			  
 			// First exit.
 			lines.exit().remove();
@@ -252,7 +185,7 @@ export default class linecontourplot extends plotframe{
 			// Finally add new lines.
 			lines.enter()
 			  .append("path")
-				.attr("stroke-width", 2)
+				.attr("stroke-width", 1)
 				.attr("stroke", d=>"orange")
 				.attr("fill", "none")
 				.attr("d", d=>obj.getpath(d) )
@@ -268,50 +201,7 @@ export default class linecontourplot extends plotframe{
 		
 	} // drawdatum
 	
-	
-	setdatum(d){
-		let obj = this;
-		obj.selecteddatum = d;
-		obj.drawdatum();
-	}
-	
 } // linecontourplot
-
-
-
-
-function matlabContour2drawLines(C){
-	
-	let lines = [];
-	
-	// {level: <scalar>, points: [...]}
-	
-	// Loop over all the columns, and decode accordingly.
-	let currentline;
-	let current_n = 0;
-	for(let i=0; i<C[0].length; i++){
-		if(current_n == 0){
-			// All hte points for this level have been collected. Start new line.
-			currentline = {level: C[0][i], points: []};
-			current_n = C[1][i];
-			lines.push(currentline);
-		} else {
-			// Add the current point to the current line
-			currentline.points.push( [ C[0][i], C[1][i] ] )
-			current_n -= 1;
-		} // if
-		
-	} // for
-	
-	
-	return lines
-} // matlabContour2drawLines
-
-
-
-
-
-
 
 
 

@@ -47,8 +47,10 @@ let template = `
 			</g>
 		</g>
 		
+		
 		<g class="datum"></g>
 		<g class="data"></g>
+		<g class="markup"></g>
 		<g class="axes"></g>
 		
 		

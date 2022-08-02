@@ -1,4 +1,5 @@
 import dragDropHandler from "./support/dragDropHandler.js";
+import dataStorage from "./support/dataStorage.js";
 
 import scatterplot from "./plots/scatterplot.js";
 import linecontourplot from "./plots/linecontourplot.js";
@@ -10,72 +11,42 @@ import linedistributionplot from "./plots/linedistributionplot.js";
 let container = document.getElementById("plotcontainer");
 
 
-
-
-let sp = new scatterplot();
-container.appendChild(sp.node);
-sp.update();
-
-
-let lc = new linecontourplot();
-container.appendChild(lc.node);
-lc.update();
-
-
-let lp = new linedistributionplot();
-container.appendChild(lp.node);
-lp.update();
-
-
-
-console.log(sp, lc, lp);
-
-
+const plots = [];
 
 // Instantiate the data.
-var data = undefined;
-
-
-
-
-// Updatethe app.
-function update(){
-	sp.update( data );
-	lc.update( data );
-	lp.update( data );
+var data = new dataStorage();
+data.globalupdate = function update(){
+	plots.forEach(p=>{
+		p.update()
+	}); // forEach
 } // update
 
-sp.onitemmouseover = function(d){
-	lc.draw(d);
-	lp.highlight([d]);
-} // onitemmouseover
-
-sp.onitemmouseout = function(d){
-	lp.unhighlight();
-} // onitemmouseover
-
-
-sp.onitemselected = function(d){
-	lp.setdatum(d);
-	lc.setdatum(d);
-}
 
 
 
-lp.onitemmouseover = function(d){
-	lc.draw(d);
-	sp.highlight([d]);
-} // onitemmouseover
+let sp = new scatterplot(data);
+container.appendChild(sp.node);
+sp.update();
+plots.push(sp)
 
-lp.onitemmouseout = function(d){
-	sp.unhighlight();
-} // onitemmouseover
+let lc = new linecontourplot(data);
+container.appendChild(lc.node);
+lc.update();
+plots.push(lc)
+
+let lp = new linedistributionplot(data);
+container.appendChild(lp.node);
+lp.update();
+plots.push(lp)
 
 
-lp.onitemselected = function(d){
-	sp.setdatum(d);
-	lc.setdatum(d);
-}
+console.log(data, plots);
+
+
+
+
+
+
 
 
 
@@ -88,8 +59,9 @@ lp.onitemselected = function(d){
 let dataLoader = new dragDropHandler();
 dataLoader.ondragdropped = function(loadeddata){
 	// This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
-	data = loadeddata;
-	update();
+	data.settasks(loadeddata);
+	plots.forEach(p=>p.updatedata());
+	data.globalupdate();
 } // ondragdropped
 
 // DRAGGING AND DROPPING THE DATA IS A DEVELOPMENT FEATURE.

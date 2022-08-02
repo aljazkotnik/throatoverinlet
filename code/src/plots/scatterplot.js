@@ -25,12 +25,16 @@ let template = `
 
 export default class scatterplot extends plotframe{
 	width = 400
-	tasks = []
+	data = {
+		current: undefined,
+		datum: undefined,
+		tasks: undefined
+	}
 	
-	constructor(){
+	constructor(data){
 		super();
 		let obj = this;
-		
+		obj.data = data;
 		
 		// Append the plot backbone.
 		let container = obj.node.querySelector("div.card-body");
@@ -41,7 +45,7 @@ export default class scatterplot extends plotframe{
 		obj.svgobj = new twoInteractiveAxesInset([]);
 		container.querySelector("div.scatterplot").appendChild(obj.svgobj.node);
 		obj.svgobj.onupdate = function(){
-			obj.draw( obj.drawdata );
+			obj.refresh();
 		}; // function
 		
 		
@@ -55,165 +59,110 @@ export default class scatterplot extends plotframe{
 		// Update this plot.
 		let obj = this;
 		
+		obj.svgobj.update();
+		
+		obj.refresh();
+	} // update
+	
+	
+	updatedata(){
+		let obj = this;
 		
 		let variables;
-		if(tasks){
-			obj.tasks = tasks;
+		if(obj.data.tasks){
 			
 			// `dr' and `name' are the only allowed strings.
-			variables = Object.getOwnPropertyNames( tasks[0].metadata )
+			variables = Object.getOwnPropertyNames( obj.data.tasks[0].metadata )
 			  .filter(name=>!["dr", "name"].includes(name))
 			  .map(name=>{
 				  return new variableobj( {
 					  name: name,
-					  extent: d3.extent(obj.tasks, t=>t.metadata[name])
+					  extent: d3.extent(obj.data.tasks, t=>t.metadata[name])
 				  } )// new variableobj
 			  });
 		} // if
 		
-		
 		obj.svgobj.update( variables );
-		
-		obj.draw( obj.drawdata );
-	} // update
+		obj.draw();
+	} // updatedata
 	
-	
-	
-	
-	get drawdata(){
-		// drawdata is different from the rest of the data in that it contains the model results.
-		let obj = this;
-		
-		
-		// Configure all the series that need to be drawn.
-		let config = [
-			{data: obj.svgobj.isConfigured ? obj.tasks : [], gclass: "data"},
-		];
-		
-		return config
-	} // drawdata
 
     
 	getcolor(d, defaultcolor){
 		let obj = this;
-		return obj.selecteddatum == d ? "orange" : defaultcolor;
-	}
+		
+		// If a current is prescribed, then any other ones should be gray.
+		// If a current is prescribed
+		
+		let c = obj.data.current ? obj.data.current==d ? defaultcolor : "gainsboro" : defaultcolor
+		c = obj.data.datum == d ? "orange" : c
+		
+		return c;
+	} // getcolor
 
 
-	draw(config){
+	draw(){
 		// config:  data, gclass, color, showline.
 		let obj = this;
 		
 		
-		
-		
-		let xaxis = obj.svgobj.x;
-		let yaxis = obj.svgobj.y;
-		
-		config.forEach(c=>{
-			
-			
-			function getcolor(d){
-				
-			} // getcolor
-			
+		if(obj.data.tasks){
 			
 			let circles = d3.select(obj.node)
-			  .select(`g.${ c.gclass }`)
+			  .select("g.data")
 			  .selectAll("circle")
-			  .data( c.data )
+			  .data( obj.data.tasks )
 			
 			// First exit.
 			circles.exit().remove();
 
-			// Then update
-			circles
-			  .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
-			  .attr("cx", d=>xaxis.getdrawvalue(d.metadata) )
-			  .attr("cy", d=>yaxis.getdrawvalue(d.metadata) );
-			
 			// Finally add new circles.
 			circles.enter()
 			  .append("circle")
-			    .attr("r", 5)
-			    .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
-			    .attr("cx", d=>xaxis.getdrawvalue(d.metadata) )
-			    .attr("cy", d=>yaxis.getdrawvalue(d.metadata) )
+				.attr("r", 5)
+				.attr("cx", -10)
+				.attr("cy", -10)
 				.on("mouseenter", (e,d)=>{
-					obj.highlight([d]);
-					obj.onitemmouseover(d);
+					obj.data.current = d;
+					obj.data.globalupdate();
 				})
 				.on("mouseout", (e,d)=>{
-					obj.unhighlight();
-					obj.onitemmouseout();
+					obj.data.current = undefined;
+					obj.data.globalupdate();
+					
 				})
 				.on("click", (e,d)=>{
-					obj.selecteddatum = obj.selecteddatum == d ? undefined : d;
-					obj.update();
-					obj.onitemselected( obj.selecteddatum );
+					obj.data.datum = obj.data.datum == d ? undefined : d;
+					obj.data.globalupdate();
 				})
-		}) // forEach
+			
+			obj.refresh();
 		
-		  
-		
-		
+		} // if
 	} // draw
 	
 	
-	highlight(selected){
+	
+	refresh(){
 		let obj = this;
 		
+		if( obj.svgobj.isConfigured ){
 		
-		let allpoints = d3.select(obj.node)
-		  .select("g.data")
-		  .selectAll("circle")
-		  .attr("r", 5)
-		  .attr("fill", d=>obj.getcolor(d, "gainsboro"))
-		
-		let selectedpoints = allpoints
-		  .filter(d=>selected.includes(d))
-		  .attr("r", 5)
-		  .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
-		  .raise()
-	} // highlight
+			let xaxis = obj.svgobj.x;
+			let yaxis = obj.svgobj.y;
+			
+			d3.select(obj.node)
+			  .select("g.data")
+			  .selectAll("circle")
+			  .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
+			  .attr("cx", d=>xaxis.getdrawvalue(d.metadata) )
+			  .attr("cy", d=>yaxis.getdrawvalue(d.metadata) ); 
+		  
+		} // if
+	} // refresh
 	
 	
-	unhighlight(){
-		let obj = this;
-		
-		d3.select(obj.node)
-		  .select("g.data")
-		  .selectAll("circle")
-		  .attr("r", 5)
-		  .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
-	} // highlight
 	
 	
-	setdatum(selecteddatum){
-		let obj = this;
-		
-		obj.selecteddatum = selecteddatum;
-		
-		d3.select(obj.node)
-		  .select("g.data")
-		  .selectAll("circle")
-		  .filter(d=>selecteddatum==d)
-		  .attr("fill",  d=>obj.getcolor(d, "cornflowerblue"))
-		  .raise()
-	} // setdatum
-	
-	
-	onitemmouseover(d){
-		// dummy function.
-	} // onitemmouseover
-	
-	
-	onitemmouseout(d){
-		// dummy function.
-	} // onitemmouseover
-	
-	onitemselected(d){
-		// dummyfunction
-	}
 	
 } // scatterplot
