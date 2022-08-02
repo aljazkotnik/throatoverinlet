@@ -5743,6 +5743,7 @@
         tasks: undefined
       };
       _this.lastselected = undefined;
+      _this.tooltips = [];
 
       var obj = _assertThisInitialized(_this);
 
@@ -5818,6 +5819,7 @@
         var obj = this;
         obj.drawcurrent();
         obj.drawdatum();
+        obj.removetooltip();
       } // draw
 
     }, {
@@ -5849,7 +5851,7 @@
             return obj.getpath(d);
           }).on("mouseenter", function (e, d) {
             e.target.setAttribute("stroke-width", 2);
-            console.log("show tooltip");
+            obj.placetooltip(e, d);
           }).on("mouseout", function (e, d) {
             e.target.setAttribute("stroke-width", 1);
           }); // on
@@ -5884,6 +5886,41 @@
         } // if
 
       } // drawdatum
+
+    }, {
+      key: "placetooltip",
+      value: function placetooltip(e, d) {
+        // The event gives the point where the tooltip should be placed, but it should be oriented using the data.
+        var obj = this; // Find the svg position of the event.
+
+        var svgbox = obj.svgobj.node.querySelector("svg").getBoundingClientRect();
+        var plotbox = obj.svgobj.plotbox;
+        var xpx = e.clientX - svgbox.x - plotbox.x[0];
+        var ypx = e.clientY - svgbox.y - plotbox.y[0]; // The scales to convert between pixel and data.
+
+        var xaxis = obj.svgobj.x;
+        var yaxis = obj.svgobj.y; // Now find the slope next to that point by first finding hte index of the closest point.
+
+        var i_event = d.points.reduce(function (i_closest, v, i) {
+          var currentclosest = d.points[i_closest];
+          var current = d.points[i];
+          var d0 = Math.pow(xpx - xaxis.scale(currentclosest[0]), 2) + Math.pow(ypx - yaxis.scale(currentclosest[1]), 2);
+          var d1 = Math.pow(xpx - xaxis.scale(current[0]), 2) + Math.pow(ypx - yaxis.scale(current[1]), 2);
+          return d1 < d0 ? i : i_closest;
+        }, 0); // Calculate the local slope.
+
+        console.log(d.points[i_event]);
+        var angle = Math.atan((d.points[i_event][1] - d.points[i_event + 1][1]) / (d.points[i_event][0] - d.points[i_event + 1][0])) / Math.PI * 180;
+        select(obj.node).select("g.markup").append("text").attr("x", xpx).attr("y", ypx).attr("transform", "rotate(".concat(-angle, " ").concat(xpx, ",").concat(ypx, ")")).text(d.level);
+      } // placetooltip
+
+    }, {
+      key: "removetooltip",
+      value: function removetooltip() {
+        // Maybe this on eis not needed on events, but just on redraws?
+        var obj = this;
+        select(obj.node).select("g.markup").selectAll("text").remove();
+      } // removetooltip
 
     }]);
 

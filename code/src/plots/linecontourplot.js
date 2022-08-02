@@ -31,6 +31,7 @@ export default class linecontourplot extends plotframe{
 		tasks: undefined
 	}
 	lastselected = undefined
+	tooltips = []
 	
 	constructor(data){
 		super();
@@ -108,7 +109,7 @@ export default class linecontourplot extends plotframe{
 		
 		obj.drawcurrent();
 		obj.drawdatum();
-		
+		obj.removetooltip();
 	} // draw
 	
 	
@@ -151,7 +152,7 @@ export default class linecontourplot extends plotframe{
 				.attr("d", d=>obj.getpath(d) )
 				.on("mouseenter", (e,d)=>{
 					e.target.setAttribute("stroke-width", 2)
-					console.log("show tooltip")
+					obj.placetooltip(e,d);
 				})
 				.on("mouseout", (e,d)=>{
 					e.target.setAttribute("stroke-width", 1)
@@ -200,6 +201,69 @@ export default class linecontourplot extends plotframe{
 		
 		
 	} // drawdatum
+	
+	
+	
+	placetooltip(e,d){
+		// The event gives the point where the tooltip should be placed, but it should be oriented using the data.
+		let obj = this;
+		
+		// Find the svg position of the event.
+		let svgbox = obj.svgobj.node.querySelector("svg").getBoundingClientRect();
+		let plotbox = obj.svgobj.plotbox;
+		let xpx = e.clientX - svgbox.x - plotbox.x[0];
+		let ypx = e.clientY - svgbox.y - plotbox.y[0];
+		
+		
+		// The scales to convert between pixel and data.
+		let xaxis = obj.svgobj.x;
+		let yaxis = obj.svgobj.y;
+		
+		
+		// Now find the slope next to that point by first finding hte index of the closest point.
+		let i_event = d.points.reduce((i_closest, v, i)=>{
+			
+			let currentclosest = d.points[i_closest];
+			let current = d.points[i];
+			
+			let d0 = ( xpx - xaxis.scale(currentclosest[0]) )**2 
+			       + ( ypx - yaxis.scale(currentclosest[1]) )**2;
+			let d1 = ( xpx - xaxis.scale(current[0]) )**2 
+			       + ( ypx - yaxis.scale(current[1]) )**2;
+			
+			return d1 < d0 ? i : i_closest;
+		}, 0);
+		
+		// Calculate the local slope.
+		console.log( d.points[i_event] )
+		
+		let angle = Math.atan( (d.points[i_event][1]-d.points[i_event+1][1])/(d.points[i_event][0]-d.points[i_event+1][0])  )/Math.PI*180
+		
+		
+		d3.select(obj.node)
+		  .select("g.markup")
+		  .append("text")
+		  .attr("x", xpx)
+		  .attr("y", ypx)
+		  .attr("transform", `rotate(${-angle} ${xpx},${ypx})`)
+		  .text(d.level)
+		
+	} // placetooltip
+	
+	
+	
+	removetooltip(){
+		// Maybe this on eis not needed on events, but just on redraws?
+		let obj = this;
+		
+		d3.select(obj.node)
+		  .select("g.markup")
+		  .selectAll("text")
+		  .remove();
+		  
+	} // removetooltip
+	
+	
 	
 } // linecontourplot
 
