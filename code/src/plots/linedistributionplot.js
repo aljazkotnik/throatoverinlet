@@ -171,18 +171,17 @@ export default class linedistributionplot extends plotframe{
 	} // draw
 	
 	
-	refresh(){
+	
+	repaint(){
 		let obj = this;
-		// console.log("refresh")
 		
 		let paths = d3.select(obj.node)
 		  .select("g.data")
-		  .selectAll("path");
+		  .selectAll("path")
 		  
-		paths.attr("d", d=>obj.getpath(d))
-		  .attr("stroke", d=>obj.getcolor(d, undefined))
-
-
+		  
+		paths.attr("stroke", d=>obj.getcolor(d, undefined))
+		
 		// If there is a current element selected it should be raised.
 		if(obj.data.current || obj.data.datum){
 			paths
@@ -192,8 +191,20 @@ export default class linedistributionplot extends plotframe{
 				el[0].parentElement.insertBefore(el[0],null)
 			  })
 		} // if	
-	
 		
+	} // repaint
+	
+	
+	refresh(){
+		let obj = this;
+		// console.log("refresh")
+		
+		let paths = d3.select(obj.node)
+		  .select("g.data")
+		  .selectAll("path")
+		  .attr("d", d=>obj.getpath(d))
+		
+		obj.repaint();
 		  
 	} // refresh
 	

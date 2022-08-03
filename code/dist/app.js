@@ -5752,6 +5752,27 @@
         } // if
 
       } // draw
+      // Try to implement a smaller update possibility to try and improve interactivity.
+
+    }, {
+      key: "repaint",
+      value: function repaint() {
+        var obj = this;
+        var circles = select(obj.node).select("g.data").selectAll("circle");
+        circles.attr("fill", function (d) {
+          return obj.getcolor(d, "cornflowerblue");
+        }); // If there is a current element selected it should be raised.
+
+        if (obj.data.current || obj.data.datum) {
+          circles.filter(function (d) {
+            return [obj.data.current, obj.data.datum].includes(d);
+          }).each(function (d, i, el) {
+            // When the element is raised it is repositioned the mouseout etc events to be triggered...
+            el[0].parentElement.insertBefore(el[0], null);
+          });
+        } // if	
+
+      } // repaint
 
     }, {
       key: "refresh",
@@ -5761,24 +5782,12 @@
         if (obj.svgobj.isConfigured) {
           var xaxis = obj.svgobj.x;
           var yaxis = obj.svgobj.y;
-          var circles = select(obj.node).select("g.data").selectAll("circle");
-          circles.attr("fill", function (d) {
-            return obj.getcolor(d, "cornflowerblue");
-          }).attr("cx", function (d) {
+          select(obj.node).select("g.data").selectAll("circle").attr("cx", function (d) {
             return xaxis.getdrawvalue(d.metadata);
           }).attr("cy", function (d) {
             return yaxis.getdrawvalue(d.metadata);
-          }); // If there is a current element selected it should be raised.
-
-          if (obj.data.current || obj.data.datum) {
-            circles.filter(function (d) {
-              return [obj.data.current, obj.data.datum].includes(d);
-            }).each(function (d, i, el) {
-              // When the element is raised it is repositioned the mouseout etc events to be triggered...
-              el[0].parentElement.insertBefore(el[0], null);
-            });
-          } // if	
-
+          });
+          obj.repaint();
         } // if
 
       } // refresh
@@ -5836,6 +5845,14 @@
 
 
     _createClass(linecontourplot, [{
+      key: "repaint",
+      value: function repaint() {
+        var obj = this; // The repaint here has to update the data also.
+
+        obj.update();
+      } // repaint
+
+    }, {
       key: "update",
       value: function update() {
         // Update this plot.
@@ -6139,14 +6156,11 @@
       } // draw
 
     }, {
-      key: "refresh",
-      value: function refresh() {
-        var obj = this; // console.log("refresh")
-
+      key: "repaint",
+      value: function repaint() {
+        var obj = this;
         var paths = select(obj.node).select("g.data").selectAll("path");
-        paths.attr("d", function (d) {
-          return obj.getpath(d);
-        }).attr("stroke", function (d) {
+        paths.attr("stroke", function (d) {
           return obj.getcolor(d, undefined);
         }); // If there is a current element selected it should be raised.
 
@@ -6159,6 +6173,17 @@
           });
         } // if	
 
+      } // repaint
+
+    }, {
+      key: "refresh",
+      value: function refresh() {
+        var obj = this; // console.log("refresh")
+
+        select(obj.node).select("g.data").selectAll("path").attr("d", function (d) {
+          return obj.getpath(d);
+        });
+        obj.repaint();
       } // refresh
 
     }]);
@@ -6175,7 +6200,7 @@
 
   data.globalupdate = function update() {
     plots.forEach(function (p) {
-      p.update();
+      p.repaint();
     }); // forEach
   }; // update
 

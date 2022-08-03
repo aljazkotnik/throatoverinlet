@@ -67,6 +67,14 @@ export default class linecontourplot extends plotframe{
 
 	} // constructor
 	
+	
+	repaint(){
+		let obj = this;
+		// The repaint here has to update the data also.
+		obj.update();
+	} // repaint
+	
+	
 	update(){
 		// Update this plot.
 		let obj = this;

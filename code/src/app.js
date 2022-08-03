@@ -17,7 +17,7 @@ const plots = [];
 var data = new dataStorage();
 data.globalupdate = function update(){
 	plots.forEach(p=>{
-		p.update()
+		p.repaint()
 	}); // forEach
 } // update
 

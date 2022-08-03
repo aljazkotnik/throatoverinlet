@@ -145,6 +145,29 @@ export default class scatterplot extends plotframe{
 	} // draw
 	
 	
+	// Try to implement a smaller update possibility to try and improve interactivity.
+	repaint(){
+		let obj = this;
+		
+		
+		let circles = d3.select(obj.node)
+			  .select("g.data")
+			  .selectAll("circle")
+			  
+		circles.attr("fill", d=>obj.getcolor(d, "cornflowerblue"));
+		
+		// If there is a current element selected it should be raised.
+		if(obj.data.current || obj.data.datum){
+			circles
+			  .filter(d=>[obj.data.current, obj.data.datum].includes(d))
+			  .each((d,i,el)=>{
+				// When the element is raised it is repositioned the mouseout etc events to be triggered...
+				el[0].parentElement.insertBefore(el[0],null)
+			  })
+		} // if	
+		
+	} // repaint
+	
 	
 	refresh(){
 		let obj = this;
@@ -154,26 +177,13 @@ export default class scatterplot extends plotframe{
 			let xaxis = obj.svgobj.x;
 			let yaxis = obj.svgobj.y;
 			
-			let circles = d3.select(obj.node)
+			d3.select(obj.node)
 			  .select("g.data")
 			  .selectAll("circle")
-			  
-			circles
-			  .attr("fill", d=>obj.getcolor(d, "cornflowerblue"))
 			  .attr("cx", d=>xaxis.getdrawvalue(d.metadata) )
 			  .attr("cy", d=>yaxis.getdrawvalue(d.metadata) ); 
 			  
-			  
-			// If there is a current element selected it should be raised.
-			if(obj.data.current || obj.data.datum){
-				circles
-				  .filter(d=>[obj.data.current, obj.data.datum].includes(d))
-				  .each((d,i,el)=>{
-					// When the element is raised it is repositioned the mouseout etc events to be triggered...
-					el[0].parentElement.insertBefore(el[0],null)
-				  })
-			} // if	
-		  
+			obj.repaint();
 		} // if
 	} // refresh
 	
