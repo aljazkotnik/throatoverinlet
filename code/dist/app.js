@@ -183,11 +183,32 @@
       this.tasks = undefined;
       this.current = undefined;
       this.datum = undefined;
-      this.distributions = undefined;
-      this.extent = {
-        distribution: undefined,
-        contour: undefined
-      };
+      this.distributions = [{
+        name: "mach",
+        extent: [],
+        accessor: function accessor(d) {
+          return d.distribution["mach"];
+        }
+      }, {
+        name: "camber",
+        extent: [],
+        accessor: function accessor(d) {
+          return d.distribution["camber"];
+        }
+      }, {
+        name: "theta",
+        extent: [],
+        accessor: function accessor(d) {
+          return d.distribution["theta"];
+        }
+      }];
+      this.contours = [{
+        name: "mach",
+        extent: [],
+        accessor: function accessor(d) {
+          return d.contour["mach"];
+        }
+      }];
     } // constructor
 
 
@@ -195,17 +216,55 @@
       key: "settasks",
       value: function settasks(tasks) {
         var obj = this;
-        obj.tasks = tasks;
-        obj.distributions = processDistributionData(obj.tasks);
-        obj.extent.contour = processContourLines(obj.tasks);
+        obj.tasks = reformatTasks(tasks);
+
+        obj.updateextent();
       } // settasks
+
+    }, {
+      key: "addtasks",
+      value: function addtasks(tasks) {
+        // Instead of replacing the data, merge the previous and the old data.
+        var obj = this;
+        var existingtasks = obj.tasks ? obj.tasks : [];
+        var mergedtasks = existingtasks.concat(reformatTasks(tasks));
+        obj.tasks = mergedtasks;
+        obj.updateextent();
+      } // addtasks
+
+    }, {
+      key: "updateextent",
+      value: function updateextent() {
+        var obj = this; // Calculate the extents here
+
+        obj.distributions.forEach(function (series) {
+          var ex = extent$1(obj.tasks, function (t) {
+            return t.distribution[series.name];
+          });
+          series.extent = ex;
+        }); // forEach
+
+        obj.contours.forEach(function (contour) {
+          var ex = extentContour(obj.tasks, function (t) {
+            return t.contour[contour.name];
+          });
+          contour.extent = ex;
+        });
+      } // updateLineDistributionExtent
 
     }]);
 
     return dataStorage;
   }(); // dataStorage
 
-  function processDistributionData(tasks) {
+  function reformatTasks(tasks) {
+    tasks = reformatDistributionData(tasks);
+    tasks = reformatContourData(tasks);
+    return tasks;
+  } // reformatTasks
+
+
+  function reformatDistributionData(tasks) {
     tasks.forEach(function (t) {
       // Mach distributon
       var mach1 = t.distribution.Mis_1.map(function (v, i) {
@@ -249,43 +308,12 @@
         }
       }; // distribution
     }); // forEach
-    // But these should really come in pars no? One per each pair?
 
-    var plotdata = [{
-      name: "mach",
-      extent: [],
-      accessor: function accessor(d) {
-        return d.distribution["mach"];
-      }
-    }, {
-      name: "camber",
-      extent: [],
-      accessor: function accessor(d) {
-        return d.distribution["camber"];
-      }
-    }, {
-      name: "theta",
-      extent: [],
-      accessor: function accessor(d) {
-        return d.distribution["theta"];
-      }
-    }]; // Calculate the extents here
-
-    plotdata.forEach(function (series) {
-      var ex = extent$1(tasks, function (t) {
-        return t.distribution[series.name];
-      }); // axisequal( ex );
-
-      series.extent = ex;
-    }); // forEach
-
-    return plotdata;
-  } // processDistributionData
+    return tasks;
+  } // reformatDistributionData
 
 
-  function processContourLines(tasks) {
-    var x_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
-    var y_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+  function reformatContourData(tasks) {
     tasks.forEach(function (t) {
       var passage0 = matlabContour2drawLines(t.contour.C);
       var passage1 = matlabContour2drawLines(t.contour.C_pitch);
@@ -319,8 +347,22 @@
         color: "gray"
       }]; // calculate the extents
 
-      t.contour.lineconfigs = flow_lines.concat(custom_lines);
-      t.contour.lineconfigs.forEach(function (line) {
+      t.contour = {
+        mach: flow_lines.concat(custom_lines)
+      };
+    }); // forEach
+
+    return tasks;
+  } // reformatContourData
+
+
+  function extentContour(tasks, accessor) {
+    var x_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+    var y_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+    tasks.forEach(function (t) {
+      // calculate the extents
+      var c = accessor(t);
+      c.forEach(function (line) {
         line.points.forEach(function (p) {
           x_extent[0] = x_extent[0] < p[0] ? x_extent[0] : p[0];
           x_extent[1] = x_extent[1] > p[0] ? x_extent[1] : p[0];
@@ -328,7 +370,8 @@
           y_extent[1] = y_extent[1] > p[1] ? y_extent[1] : p[1];
         }); // forEach
       }); // forEach
-    }); // Control the plot aspect ratio by controlling the extents. Always try to keep hte data in the middle.
+    }); // forEach
+    // Control the plot aspect ratio by controlling the extents. Always try to keep hte data in the middle.
     // Try to scale the plot to fit the aspect ratio??
 
     var y_range = y_extent[1] - y_extent[0];
@@ -346,7 +389,7 @@
       x: x_extent,
       y: y_extent
     };
-  } // processContourLines
+  } // extentContour
 
 
   function extent$1(tasks, accessor) {
@@ -5695,7 +5738,7 @@
         var variables;
 
         if (obj.data.tasks) {
-          // `dr' and `name' are the only allowed strings.
+          // `dr' and `name' are the only allowed strings. dr is the filepath to the original data on Demetrios' machine.
           variables = Object.getOwnPropertyNames(obj.data.tasks[0].metadata).filter(function (name) {
             return !["dr", "name"].includes(name);
           }).map(function (name) {
@@ -5812,6 +5855,9 @@
 
       _this = _super.call(this);
       _this.width = 400;
+
+      _this.accessor = function () {};
+
       _this.data = {
         current: undefined,
         datum: undefined,
@@ -5863,15 +5909,17 @@
 
     }, {
       key: "updatedata",
-      value: function updatedata() {
+      value: function updatedata(contour) {
+        // The data object may allow several different contours to be plotted, but the 'contour' here specifies which one this plot should select.
         var obj = this;
+        obj.accessor = contour.accessor;
         var xVariable = new variableobj({
           name: "x",
-          extent: obj.data.extent.contour.x
+          extent: contour.extent.x
         });
         var yVariable = new variableobj({
           name: "y",
-          extent: obj.data.extent.contour.y
+          extent: contour.extent.y
         }); // First update the menu current selection, so that whenthe items are updated the current option will be automatically assigned.
 
         obj.svgobj.x.menu.current = xVariable;
@@ -5923,7 +5971,7 @@
           var titles = obj.node.querySelectorAll("input.card-title");
           titles[0].value = obj.lastselected.metadata.name[0];
           titles[1].value = obj.data.datum ? obj.data.datum.metadata.name[0] : "";
-          var lines = select(obj.node).select("g.data").selectAll("path").data(obj.lastselected.contour.lineconfigs); // First exit.
+          var lines = select(obj.node).select("g.data").selectAll("path").data(obj.accessor(obj.lastselected)); // First exit.
 
           lines.exit().remove(); // Then update
 
@@ -5954,7 +6002,7 @@
         var obj = this;
 
         if (obj.data.datum) {
-          var lines = select(obj.node).select("g.datum").selectAll("path").data(obj.data.datum.contour.lineconfigs); // First exit.
+          var lines = select(obj.node).select("g.datum").selectAll("path").data(obj.accessor(obj.data.datum)); // First exit.
 
           lines.exit().remove(); // Then update
 
@@ -6231,10 +6279,10 @@
 
   dataLoader.ondragdropped = function (loadeddata) {
     // This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
-    data.settasks(loadeddata); // Load the data in and assign the series.
+    data.addtasks(loadeddata); // Load the data in and assign the series.
 
     sp.updatedata();
-    lc.updatedata();
+    lc.updatedata(data.contours[0]);
     lp_mach.updatedata(data.distributions[0]);
     lp_camber.updatedata(data.distributions[1]);
     lp_theta.updatedata(data.distributions[2]);

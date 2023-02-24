@@ -3,12 +3,17 @@ export default class dataStorage{
   current = undefined
   datum = undefined
   
-  distributions = undefined
+  distributions = [
+	  {name: "mach", extent: [], accessor: function(d){ return d.distribution["mach"]} },
+	  {name: "camber", extent: [], accessor: function(d){ return d.distribution["camber"]} },
+	  {name: "theta", extent: [], accessor: function(d){ return d.distribution["theta"]} }
+  ]
   
-  extent = {
-	distribution: undefined,
-	contour: undefined
-  }
+  
+  contours = [
+       {name: "mach", extent: [], accessor: function(d){ return d.contour["mach"]} }
+  ]
+  
   
   constructor(){
     let obj = this;
@@ -19,20 +24,60 @@ export default class dataStorage{
   settasks(tasks){
 	let obj = this;
 	
-	obj.tasks = tasks;
+	obj.tasks = reformatTasks(tasks);;
 	
-	obj.distributions = processDistributionData(obj.tasks);
-	obj.extent.contour = processContourLines(obj.tasks);
-	
+	// The actual distribution data is created for individual task objects, and the `distributions' property are helpers for the plots - they are given to the plots to specify which distribution they should use.
+	obj.updateextent();
   } // settasks
+  
+  addtasks(tasks){
+	  // Instead of replacing the data, merge the previous and the old data.
+	  let obj = this;
+	  
+	  let existingtasks = obj.tasks ? obj.tasks : [];
+	  let mergedtasks = existingtasks.concat( reformatTasks(tasks) );
+	  
+	  obj.tasks = mergedtasks;
+	  
+	  obj.updateextent();
+  } // addtasks
+  
+  
+  
+  
+  updateextent(){
+	let obj = this;
+	
+	// Calculate the extents here
+	obj.distributions.forEach(series=>{
+		let ex = extent( obj.tasks, function(t){return t.distribution[series.name]} );
+		series.extent = ex;
+	}) // forEach
+	
+	
+	obj.contours.forEach(contour=>{
+		let ex = extentContour( obj.tasks, function(t){return t.contour[contour.name]} );
+		contour.extent = ex;
+	})
+	
+  } // updateLineDistributionExtent
+  
+
+
+  
+  
   
 } // dataStorage
 
 
+function reformatTasks(tasks){
+	tasks = reformatDistributionData(tasks);
+	tasks = reformatContourData(tasks);
+	return tasks
+} // reformatTasks
 
-function processDistributionData(tasks){
-	
-	
+
+function reformatDistributionData(tasks){
 	
 	tasks.forEach(function(t){
 		
@@ -77,37 +122,15 @@ function processDistributionData(tasks){
 		
 	}) // forEach
 	
+	return tasks
 	
 	
-	// But these should really come in pars no? One per each pair?
-	let plotdata = [
-	  {name: "mach", extent: [], accessor: function(d){ return d.distribution["mach"]} },
-	  {name: "camber", extent: [], accessor: function(d){ return d.distribution["camber"]} },
-	  {name: "theta", extent: [], accessor: function(d){ return d.distribution["theta"]} }
-	]
-	
-	
-	// Calculate the extents here
-	plotdata.forEach(series=>{
+} // reformatDistributionData
 
-		let ex = extent( tasks, function(t){return t.distribution[series.name]} );
-		// axisequal( ex );
-		
-		series.extent = ex;
-			
-	}) // forEach
-	
-	return plotdata
-	
-} // processDistributionData
-
-
-
-function processContourLines(tasks){
+function reformatContourData(tasks){
 	
 	
-	let x_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
-	let y_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+	
 	
 	tasks.forEach(function(t){
 		let passage0 = matlabContour2drawLines( t.contour.C );
@@ -128,9 +151,28 @@ function processContourLines(tasks){
 
 		
 		// calculate the extents
-		t.contour.lineconfigs = flow_lines.concat(custom_lines);
+		t.contour = {
+			mach: flow_lines.concat(custom_lines)
+		}
 		
-		t.contour.lineconfigs.forEach(line=>{
+	}) // forEach
+	
+	return tasks
+	
+} // reformatContourData
+
+
+function extentContour(tasks, accessor){
+	
+	
+	let x_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+	let y_extent = [Math.POSITIVE_INFINITY, Math.NEGATIVE_INFINITY];
+
+	tasks.forEach(function(t){	
+		// calculate the extents
+		let c = accessor(t);
+		
+		c.forEach(line=>{
 			line.points.forEach(p=>{
 				x_extent[0] = x_extent[0] < p[0] ? x_extent[0] : p[0];
 				x_extent[1] = x_extent[1] > p[0] ? x_extent[1] : p[0];
@@ -139,9 +181,7 @@ function processContourLines(tasks){
 				y_extent[1] = y_extent[1] > p[1] ? y_extent[1] : p[1];
 			}) // forEach
 		}) // forEach
-	})
-	
-	
+	}) // forEach
 	
 	
 	// Control the plot aspect ratio by controlling the extents. Always try to keep hte data in the middle.
@@ -168,10 +208,7 @@ function processContourLines(tasks){
 	}
 	
 	
-} // processContourLines
-
-
-
+} // extentContour
 
 
 function extent(tasks, accessor){
