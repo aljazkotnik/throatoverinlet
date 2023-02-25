@@ -29,13 +29,18 @@ let additional = `
 
 
 export default class linecontourplot extends plotframe{
+	
 	width = 400
+	
+	accessor = function(){}
 	data = {
 		current: undefined,
 		datum: undefined,
 		tasks: undefined
 	}
 	lastselected = undefined
+	
+	
 	tooltips = []
 	
 	constructor(data){
@@ -84,12 +89,13 @@ export default class linecontourplot extends plotframe{
 	} // update
 	
 
-    updatedata(){
+    updatedata(contour){
+		// The data object may allow several different contours to be plotted, but the 'contour' here specifies which one this plot should select.
 		let obj = this;
+		obj.accessor = contour.accessor;
 
-
-		let xVariable = new variableobj({name: "x", extent: obj.data.extent.contour.x});
-		let yVariable = new variableobj({name: "y", extent: obj.data.extent.contour.y});
+		let xVariable = new variableobj({name: "x", extent: contour.extent.x});
+		let yVariable = new variableobj({name: "y", extent: contour.extent.y});
 		
 
 		// First update the menu current selection, so that whenthe items are updated the current option will be automatically assigned.
@@ -153,7 +159,7 @@ export default class linecontourplot extends plotframe{
 			let lines = d3.select(obj.node)
 			  .select("g.data")
 			  .selectAll("path")
-			  .data( obj.lastselected.contour.lineconfigs )
+			  .data( obj.accessor(obj.lastselected) )
 			  
 			// First exit.
 			lines.exit().remove();
@@ -193,7 +199,7 @@ export default class linecontourplot extends plotframe{
 			let lines = d3.select(obj.node)
 			  .select("g.datum")
 			  .selectAll("path")
-			  .data( obj.data.datum.contour.lineconfigs )
+			  .data( obj.accessor(obj.data.datum) )
 			  
 			// First exit.
 			lines.exit().remove();

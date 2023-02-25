@@ -59,26 +59,17 @@ console.log(data, plots);
 
 
 
-
-
-
-
-
-
-
-
-
 // ADD DRAG AND DROP FOR DATA
 
 let dataLoader = new dragDropHandler();
 dataLoader.ondragdropped = function(loadeddata){
 	// This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
-	data.settasks(loadeddata);
+	data.addtasks(loadeddata);
 	
 	
 	// Load the data in and assign the series.
 	sp.updatedata()
-	lc.updatedata()
+	lc.updatedata( data.contours[0] )
 	
 	
 	lp_mach.updatedata( data.distributions[0] )

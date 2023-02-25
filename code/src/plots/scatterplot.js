@@ -71,7 +71,7 @@ export default class scatterplot extends plotframe{
 		let variables;
 		if(obj.data.tasks){
 			
-			// `dr' and `name' are the only allowed strings.
+			// `dr' and `name' are the only allowed strings. dr is the filepath to the original data on Demetrios' machine.
 			variables = Object.getOwnPropertyNames( obj.data.tasks[0].metadata )
 			  .filter(name=>!["dr", "name"].includes(name))
 			  .map(name=>{
