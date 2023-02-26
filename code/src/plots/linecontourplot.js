@@ -132,34 +132,31 @@ export default class linecontourplot extends plotframe{
 		// This should only draw a very specific item. But the config is precomputed anyway.
 		let obj = this;		
 		
-		obj.drawcurrent();
-		obj.drawdatum();
+		
+		// Display the name in the title.
+		let titles = obj.node.querySelectorAll("input.card-title");
+		titles[0].value = obj.data.current ? obj.data.current.metadata.name[0] : "";
+		titles[1].value = obj.data.datum ? obj.data.datum.metadata.name[0] : "";
+		
+		// Keep track of the latest selected?
+		obj.lastselected = obj.data.current ? obj.data.current : obj.lastselected;
+		
+		// g.datum, g.data
+		obj.drawdata( obj.lastselected, "g.data", function(d){return d.color} );
+		obj.drawdata( obj.data.datum, "g.datum", function(){return "orange"} );
 		obj.removetooltip();
 	} // draw
 	
 	
-	drawcurrent(){
+	drawdata(data, gselector, coloraccessor){
 		let obj = this;
 		
-		
-		
-		if(obj.data.current){
-			obj.lastselected = obj.data.current;
-		} // if
-		
-		if(obj.lastselected){
-
-			// Display the name in the title.
-			let titles = obj.node.querySelectorAll("input.card-title");
-			titles[0].value = obj.lastselected.metadata.name[0];
-			titles[1].value = obj.data.datum ? obj.data.datum.metadata.name[0] : "";
-		
-
-
+		if(data){
+				
 			let lines = d3.select(obj.node)
-			  .select("g.data")
+			  .select( gselector )
 			  .selectAll("path")
-			  .data( obj.accessor(obj.lastselected) )
+			  .data( obj.accessor( data ) )
 			  
 			// First exit.
 			lines.exit().remove();
@@ -167,14 +164,14 @@ export default class linecontourplot extends plotframe{
 			// Then update
 			lines
 			  .attr("d", d=>obj.getpath(d))
-			  .attr("stroke", d=>d.color)
+			  .attr("stroke", coloraccessor)
 			  
 			  
 			// Finally add new lines.
 			lines.enter()
 			  .append("path")
 				.attr("stroke-width", 1)
-				.attr("stroke", d=>d.color)
+				.attr("stroke", coloraccessor)
 				.attr("fill", "none")
 				.attr("d", d=>obj.getpath(d) )
 				.on("mouseenter", (e,d)=>{
@@ -184,50 +181,18 @@ export default class linecontourplot extends plotframe{
 				.on("mouseout", (e,d)=>{
 					e.target.setAttribute("stroke-width", 1)
 				}) // on
-		} // if
-			
-	} // drawcurrent
-	
-	
-	drawdatum(){
-		// This should only draw a very specific item. But the config is precomputed anyway.
-		let obj = this;
-		
-		
-		if(obj.data.datum){
-				
-			let lines = d3.select(obj.node)
-			  .select("g.datum")
-			  .selectAll("path")
-			  .data( obj.accessor(obj.data.datum) )
-			  
-			// First exit.
-			lines.exit().remove();
-
-			// Then update
-			lines
-			  .attr("d", d=>obj.getpath(d))
-			  .attr("stroke", d=>"orange")
-			  
-			  
-			// Finally add new lines.
-			lines.enter()
-			  .append("path")
-				.attr("stroke-width", 1)
-				.attr("stroke", d=>"orange")
-				.attr("fill", "none")
-				.attr("d", d=>obj.getpath(d) )
 				
 			
 		} else {
 			d3.select(obj.node)
-			  .select("g.datum")
+			  .select( gselector )
 			  .selectAll("path")
 			  .remove()
 		} // if
-		
-		
-	} // drawdatum
+	} // drawdata
+	
+	
+	
 	
 	
 	
@@ -262,7 +227,6 @@ export default class linecontourplot extends plotframe{
 		}, 0);
 		
 		// Calculate the local slope.
-		console.log( d.points[i_event] )
 		
 		let angle = Math.atan( (d.points[i_event][1]-d.points[i_event+1][1])/(d.points[i_event][0]-d.points[i_event+1][0])  )/Math.PI*180
 		
@@ -272,6 +236,7 @@ export default class linecontourplot extends plotframe{
 		  .append("text")
 		  .attr("x", xpx)
 		  .attr("y", ypx)
+		  .attr("font-size", "10px")
 		  .attr("transform", `rotate(${-angle} ${xpx},${ypx})`)
 		  .text(d.level)
 		

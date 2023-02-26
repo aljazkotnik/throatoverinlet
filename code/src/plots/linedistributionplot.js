@@ -102,7 +102,7 @@ export default class linedistributionplot extends plotframe{
 		} // if
 		
 		let c = obj.data.current ? obj.data.current==task ? defaultcolor : "gainsboro" : defaultcolor
-		c = obj.data.datum == task ? "orange" : c
+		c = obj.data.datum==task ? "orange" : c
 		
 		return c;
 	} // getcolor
@@ -145,21 +145,20 @@ export default class linedistributionplot extends plotframe{
 				.attr("fill", "none")
 				.on("mouseenter", (e,d)=>{
 					// Place a label next to the target.
-					obj.data.current = d;
-					// When the element is raised it is repositioned the mouseout etc events to be triggered...
-					// e.target.parentElement.insertBefore(e.target,null)
-					// The raising is done in refresh since it has to happen on mouseover on other plots.
+					// obj.data.current = d;
+					obj.data.setcurrent(d);
 					obj.refresh();
 					obj.data.globalupdate();
-					
 				})
 				.on("mouseout", (e,d)=>{
-					obj.data.current = undefined;
+					// obj.data.current = undefined;
+					obj.data.setcurrent(undefined);
 					obj.refresh();
 					obj.data.globalupdate();
 				})
 				.on("click", (e,d)=>{
-					obj.data.datum = obj.data.datum == d ? undefined : d;
+					// obj.data.datum = obj.data.datum == d ? undefined : d;
+					obj.data.selecttask(d);
 					obj.refresh();
 					obj.data.globalupdate();
 				})

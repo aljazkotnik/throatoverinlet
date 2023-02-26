@@ -10,24 +10,25 @@ export default class dragDropHandler{
 	// Loadfiles is a separate function so that it can b calld programatically.
 	let obj = this;
 	
-	
-	// We don't support dropping in several files - drag-and drop is only temporary.
-	let file = files[0];
-	
-	let url;
-	if(file instanceof File){
-		url = URL.createObjectURL(file);
-	} else {
-		url = file;
-	} // if
+	// Convert to support several files to be drag-dropped. The files are allowed to be processed in sequence, and drawn on the screen in sequence.
+	files.forEach(function(file){
+			
+		let url;
+		if(file instanceof File){
+			url = URL.createObjectURL(file);
+		} else {
+			url = file;
+		} // if
 
-	
-	fetch( url )
-	  .then(res=>res.json())
-	  .then(json=>{
-		  // Now we update the data and the app.
-		  obj.ondragdropped(json);
-	  }); // fetch  
+		
+		fetch( url )
+		  .then(res=>res.json())
+		  .then(json=>{
+			  // Now we update the data and the app.
+			  obj.ondragdropped(json);
+		  }); // fetch  
+	  
+	}) // forEach
   } // loadfiles
   
 	
