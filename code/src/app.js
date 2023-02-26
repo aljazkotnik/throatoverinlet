@@ -54,7 +54,6 @@ plots.push(lp_theta)
 
 
 
-console.log(data, plots);
 
 
 
@@ -65,7 +64,7 @@ let dataLoader = new dragDropHandler();
 dataLoader.ondragdropped = function(loadeddata){
 	// This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
 	data.addtasks(loadeddata);
-	
+	console.log(`Current number of tasks = ${data.tasks.length}`)
 	
 	// Load the data in and assign the series.
 	sp.updatedata()

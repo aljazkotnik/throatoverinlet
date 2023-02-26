@@ -25,6 +25,8 @@ let template = `
 
 export default class scatterplot extends plotframe{
 	width = 400
+	
+	// Gets replaced by the actual data object.
 	data = {
 		current: undefined,
 		datum: undefined,
@@ -123,18 +125,21 @@ export default class scatterplot extends plotframe{
 				.attr("cx", -10)
 				.attr("cy", -10)
 				.on("mouseenter", (e,d)=>{
-					obj.data.current = d;
+					// obj.data.current = d;
+					obj.data.setcurrent(d);
 					obj.refresh();
 					obj.data.globalupdate();
 				})
 				.on("mouseout", (e,d)=>{
-					obj.data.current = undefined;
+					// obj.data.current = undefined;
+					obj.data.setcurrent(undefined);
 					obj.refresh();
 					obj.data.globalupdate();
 					
 				})
 				.on("click", (e,d)=>{
-					obj.data.datum = obj.data.datum == d ? undefined : d;
+					// obj.data.datum = obj.data.datum == d ? undefined : d;
+					obj.data.selecttask(d);
 					obj.refresh();
 					obj.data.globalupdate();
 				})

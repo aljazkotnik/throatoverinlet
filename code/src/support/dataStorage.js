@@ -1,5 +1,9 @@
 export default class dataStorage{
   tasks = undefined
+  
+  
+  // Highlighting
+  currentlocked = false
   current = undefined
   datum = undefined
   
@@ -21,6 +25,7 @@ export default class dataStorage{
   
   
   
+  // DATA IMPORT
   settasks(tasks){
 	let obj = this;
 	
@@ -43,9 +48,8 @@ export default class dataStorage{
   } // addtasks
   
   
-  
-  
   updateextent(){
+	// After new data is added the extent has to be corrected.
 	let obj = this;
 	
 	// Calculate the extents here
@@ -60,9 +64,46 @@ export default class dataStorage{
 		contour.extent = ex;
 	})
 	
-  } // updateLineDistributionExtent
+  } // updateextent
   
 
+  selecttask(task){
+	// The user may wish to have two datum designs chosen at any time. If two datums are chosen, then the highlighting should not be active. More than two datums are not allowed because the names need to fit in the header.
+	let obj = this;
+	
+	
+	if(obj.datum){
+		// Datum currently defined. Task could be datum clicked again, or another task.
+		if(obj.datum==task){
+			// Datum clicked again. Clear everything.
+			obj.currentlocked = false;
+			obj.current = undefined;
+			obj.datum = undefined;
+		} else {
+			// Datum defined, but a different task has been clicked. If the task is the same as current, then just unlock the current. If it is a different task, then replace current.
+			if(obj.current==task){
+				// Toggle the selection.
+				obj.currentlocked = !obj.currentlocked;
+				obj.current = obj.currentlocked ? task : undefined;
+			} else {
+				// New task selected as current.
+				obj.currentlocked = true;
+				obj.current = task;
+			} // if
+		} // if
+	} else {
+		// Datum not currently defined. Select this task as datum.
+		obj.datum = task;
+		obj.currentlocked = false;
+	} // if
+	
+
+  } // toggledatum
+ 
+  setcurrent(task){
+	let obj = this;
+	obj.current = obj.currentlocked ? obj.current : task;
+  } // togglecurrent
 
   
   
@@ -201,11 +242,25 @@ function extentContour(tasks, accessor){
 		]
 	} // if
 	
-	
+	/*
 	return {
 		x: x_extent,
 		y: y_extent
 	}
+	*/
+	
+	// As per Demetrios' specific request, the data extent is modified here to achieve a zoomed in initial state.
+	const z = 1.75; // hand picked value.
+	const xc = (x_extent[0] + x_extent[1])/2;
+	const yc = (y_extent[0] + y_extent[1])/2;
+	const dx = (x_extent[1] - x_extent[0])/(2*z);
+	const dy = (y_extent[1] - y_extent[0])/(2*z);
+	
+	return {
+		x: [xc - dx, xc + dx],
+		y: [yc - dy, yc + dy]
+	}
+
 	
 	
 } // extentContour

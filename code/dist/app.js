@@ -117,24 +117,25 @@
       key: "loadfiles",
       value: function loadfiles(files) {
         // Loadfiles is a separate function so that it can b calld programatically.
-        var obj = this; // We don't support dropping in several files - drag-and drop is only temporary.
+        var obj = this; // Convert to support several files to be drag-dropped. The files are allowed to be processed in sequence, and drawn on the screen in sequence.
 
-        var file = files[0];
-        var url;
+        files.forEach(function (file) {
+          var url;
 
-        if (file instanceof File) {
-          url = URL.createObjectURL(file);
-        } else {
-          url = file;
-        } // if
+          if (file instanceof File) {
+            url = URL.createObjectURL(file);
+          } else {
+            url = file;
+          } // if
 
 
-        fetch(url).then(function (res) {
-          return res.json();
-        }).then(function (json) {
-          // Now we update the data and the app.
-          obj.ondragdropped(json);
-        }); // fetch  
+          fetch(url).then(function (res) {
+            return res.json();
+          }).then(function (json) {
+            // Now we update the data and the app.
+            obj.ondragdropped(json);
+          }); // fetch  
+        }); // forEach
       } // loadfiles
 
     }, {
@@ -177,10 +178,12 @@
   }(); // dragDropHandler
 
   var dataStorage = /*#__PURE__*/function () {
+    // Highlighting
     function dataStorage() {
       _classCallCheck(this, dataStorage);
 
       this.tasks = undefined;
+      this.currentlocked = false;
       this.current = undefined;
       this.datum = undefined;
       this.distributions = [{
@@ -210,6 +213,7 @@
         }
       }];
     } // constructor
+    // DATA IMPORT
 
 
     _createClass(dataStorage, [{
@@ -235,6 +239,7 @@
     }, {
       key: "updateextent",
       value: function updateextent() {
+        // After new data is added the extent has to be corrected.
         var obj = this; // Calculate the extents here
 
         obj.distributions.forEach(function (series) {
@@ -250,7 +255,49 @@
           });
           contour.extent = ex;
         });
-      } // updateLineDistributionExtent
+      } // updateextent
+
+    }, {
+      key: "selecttask",
+      value: function selecttask(task) {
+        // The user may wish to have two datum designs chosen at any time. If two datums are chosen, then the highlighting should not be active. More than two datums are not allowed because the names need to fit in the header.
+        var obj = this;
+
+        if (obj.datum) {
+          // Datum currently defined. Task could be datum clicked again, or another task.
+          if (obj.datum == task) {
+            // Datum clicked again. Clear everything.
+            obj.currentlocked = false;
+            obj.current = undefined;
+            obj.datum = undefined;
+          } else {
+            // Datum defined, but a different task has been clicked. If the task is the same as current, then just unlock the current. If it is a different task, then replace current.
+            if (obj.current == task) {
+              // Toggle the selection.
+              obj.currentlocked = !obj.currentlocked;
+              obj.current = obj.currentlocked ? task : undefined;
+            } else {
+              // New task selected as current.
+              obj.currentlocked = true;
+              obj.current = task;
+            } // if
+
+          } // if
+
+        } else {
+          // Datum not currently defined. Select this task as datum.
+          obj.datum = task;
+          obj.currentlocked = false;
+        } // if
+
+      } // toggledatum
+
+    }, {
+      key: "setcurrent",
+      value: function setcurrent(task) {
+        var obj = this;
+        obj.current = obj.currentlocked ? obj.current : task;
+      } // togglecurrent
 
     }]);
 
@@ -384,10 +431,24 @@
       x_extent = [x_extent[0] + x_range / 2 - y_range / 2, x_extent[0] + x_range / 2 + y_range / 2];
     } // if
 
-
+    /*
     return {
-      x: x_extent,
-      y: y_extent
+    	x: x_extent,
+    	y: y_extent
+    }
+    */
+    // As per Demetrios' specific request, the data extent is modified here to achieve a zoomed in initial state.
+
+
+    var z = 1.75; // hand picked value.
+
+    var xc = (x_extent[0] + x_extent[1]) / 2;
+    var yc = (y_extent[0] + y_extent[1]) / 2;
+    var dx = (x_extent[1] - x_extent[0]) / (2 * z);
+    var dy = (y_extent[1] - y_extent[0]) / (2 * z);
+    return {
+      x: [xc - dx, xc + dx],
+      y: [yc - dy, yc + dy]
     };
   } // extentContour
 
@@ -5686,7 +5747,8 @@
   var scatterplot = /*#__PURE__*/function (_plotframe) {
     _inherits(scatterplot, _plotframe);
 
-    var _super = _createSuper(scatterplot);
+    var _super = _createSuper(scatterplot); // Gets replaced by the actual data object.
+
 
     function scatterplot(data) {
       var _this;
@@ -5779,15 +5841,18 @@
           circles.exit().remove(); // Finally add new circles.
 
           circles.enter().append("circle").attr("r", 5).attr("cx", -10).attr("cy", -10).on("mouseenter", function (e, d) {
-            obj.data.current = d;
+            // obj.data.current = d;
+            obj.data.setcurrent(d);
             obj.refresh();
             obj.data.globalupdate();
           }).on("mouseout", function (e, d) {
-            obj.data.current = undefined;
+            // obj.data.current = undefined;
+            obj.data.setcurrent(undefined);
             obj.refresh();
             obj.data.globalupdate();
           }).on("click", function (e, d) {
-            obj.data.datum = obj.data.datum == d ? undefined : d;
+            // obj.data.datum = obj.data.datum == d ? undefined : d;
+            obj.data.selecttask(d);
             obj.refresh();
             obj.data.globalupdate();
           });
@@ -5950,40 +6015,38 @@
       key: "draw",
       value: function draw() {
         // This should only draw a very specific item. But the config is precomputed anyway.
-        var obj = this;
-        obj.drawcurrent();
-        obj.drawdatum();
+        var obj = this; // Display the name in the title.
+
+        var titles = obj.node.querySelectorAll("input.card-title");
+        titles[0].value = obj.data.current ? obj.data.current.metadata.name[0] : "";
+        titles[1].value = obj.data.datum ? obj.data.datum.metadata.name[0] : ""; // Keep track of the latest selected?
+
+        obj.lastselected = obj.data.current ? obj.data.current : obj.lastselected; // g.datum, g.data
+
+        obj.drawdata(obj.lastselected, "g.data", function (d) {
+          return d.color;
+        });
+        obj.drawdata(obj.data.datum, "g.datum", function () {
+          return "orange";
+        });
         obj.removetooltip();
       } // draw
 
     }, {
-      key: "drawcurrent",
-      value: function drawcurrent() {
+      key: "drawdata",
+      value: function drawdata(data, gselector, coloraccessor) {
         var obj = this;
 
-        if (obj.data.current) {
-          obj.lastselected = obj.data.current;
-        } // if
-
-
-        if (obj.lastselected) {
-          // Display the name in the title.
-          var titles = obj.node.querySelectorAll("input.card-title");
-          titles[0].value = obj.lastselected.metadata.name[0];
-          titles[1].value = obj.data.datum ? obj.data.datum.metadata.name[0] : "";
-          var lines = select(obj.node).select("g.data").selectAll("path").data(obj.accessor(obj.lastselected)); // First exit.
+        if (data) {
+          var lines = select(obj.node).select(gselector).selectAll("path").data(obj.accessor(data)); // First exit.
 
           lines.exit().remove(); // Then update
 
           lines.attr("d", function (d) {
             return obj.getpath(d);
-          }).attr("stroke", function (d) {
-            return d.color;
-          }); // Finally add new lines.
+          }).attr("stroke", coloraccessor); // Finally add new lines.
 
-          lines.enter().append("path").attr("stroke-width", 1).attr("stroke", function (d) {
-            return d.color;
-          }).attr("fill", "none").attr("d", function (d) {
+          lines.enter().append("path").attr("stroke-width", 1).attr("stroke", coloraccessor).attr("fill", "none").attr("d", function (d) {
             return obj.getpath(d);
           }).on("mouseenter", function (e, d) {
             e.target.setAttribute("stroke-width", 2);
@@ -5991,37 +6054,11 @@
           }).on("mouseout", function (e, d) {
             e.target.setAttribute("stroke-width", 1);
           }); // on
-        } // if
-
-      } // drawcurrent
-
-    }, {
-      key: "drawdatum",
-      value: function drawdatum() {
-        // This should only draw a very specific item. But the config is precomputed anyway.
-        var obj = this;
-
-        if (obj.data.datum) {
-          var lines = select(obj.node).select("g.datum").selectAll("path").data(obj.accessor(obj.data.datum)); // First exit.
-
-          lines.exit().remove(); // Then update
-
-          lines.attr("d", function (d) {
-            return obj.getpath(d);
-          }).attr("stroke", function (d) {
-            return "orange";
-          }); // Finally add new lines.
-
-          lines.enter().append("path").attr("stroke-width", 1).attr("stroke", function (d) {
-            return "orange";
-          }).attr("fill", "none").attr("d", function (d) {
-            return obj.getpath(d);
-          });
         } else {
-          select(obj.node).select("g.datum").selectAll("path").remove();
+          select(obj.node).select(gselector).selectAll("path").remove();
         } // if
 
-      } // drawdatum
+      } // drawdata
 
     }, {
       key: "placetooltip",
@@ -6045,9 +6082,8 @@
           return d1 < d0 ? i : i_closest;
         }, 0); // Calculate the local slope.
 
-        console.log(d.points[i_event]);
         var angle = Math.atan((d.points[i_event][1] - d.points[i_event + 1][1]) / (d.points[i_event][0] - d.points[i_event + 1][0])) / Math.PI * 180;
-        select(obj.node).select("g.markup").append("text").attr("x", xpx).attr("y", ypx).attr("transform", "rotate(".concat(-angle, " ").concat(xpx, ",").concat(ypx, ")")).text(d.level);
+        select(obj.node).select("g.markup").append("text").attr("x", xpx).attr("y", ypx).attr("font-size", "10px").attr("transform", "rotate(".concat(-angle, " ").concat(xpx, ",").concat(ypx, ")")).text(d.level);
       } // placetooltip
 
     }, {
@@ -6183,18 +6219,18 @@
 
           lines.enter().append("path").attr("stroke-width", 2).attr("fill", "none").on("mouseenter", function (e, d) {
             // Place a label next to the target.
-            obj.data.current = d; // When the element is raised it is repositioned the mouseout etc events to be triggered...
-            // e.target.parentElement.insertBefore(e.target,null)
-            // The raising is done in refresh since it has to happen on mouseover on other plots.
-
+            // obj.data.current = d;
+            obj.data.setcurrent(d);
             obj.refresh();
             obj.data.globalupdate();
           }).on("mouseout", function (e, d) {
-            obj.data.current = undefined;
+            // obj.data.current = undefined;
+            obj.data.setcurrent(undefined);
             obj.refresh();
             obj.data.globalupdate();
           }).on("click", function (e, d) {
-            obj.data.datum = obj.data.datum == d ? undefined : d;
+            // obj.data.datum = obj.data.datum == d ? undefined : d;
+            obj.data.selecttask(d);
             obj.refresh();
             obj.data.globalupdate();
           });
@@ -6272,14 +6308,14 @@
   var lp_theta = new linedistributionplot(data);
   container.appendChild(lp_theta.node);
   lp_theta.update();
-  plots.push(lp_theta);
-  console.log(data, plots); // ADD DRAG AND DROP FOR DATA
+  plots.push(lp_theta); // ADD DRAG AND DROP FOR DATA
 
   var dataLoader = new dragDropHandler();
 
   dataLoader.ondragdropped = function (loadeddata) {
     // This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
-    data.addtasks(loadeddata); // Load the data in and assign the series.
+    data.addtasks(loadeddata);
+    console.log("Current number of tasks = ".concat(data.tasks.length)); // Load the data in and assign the series.
 
     sp.updatedata();
     lc.updatedata(data.contours[0]);
