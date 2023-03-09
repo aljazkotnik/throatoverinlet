@@ -1,5 +1,8 @@
+import crossfilter from "crossfilter2";
+
+
 export default class dataStorage{
-  tasks = undefined
+  _tasks = undefined
   
   
   // Highlighting
@@ -21,31 +24,53 @@ export default class dataStorage{
   
   constructor(){
     let obj = this;
+	
+	
+	// Initiate a crossfilter object.
+	obj.crossfilter = crossfilter();
+	
   } // constructor
   
   
+  // Access the data.
+  set tasks(d){
+	  let obj = this;
+	  obj._tasks = d;
+  }
+  
+  get tasks(){
+	  let obj = this;
+	  return obj._tasks;
+  }
+  
   
   // DATA IMPORT
-  settasks(tasks){
+  replace(tasks){
 	let obj = this;
 	
-	obj.tasks = reformatTasks(tasks);;
+	obj.tasks = reformatTasks(tasks);
+	
+	obj.crossfilter.remove();
+	obj.crossfilter.add( obj.tasks );
 	
 	// The actual distribution data is created for individual task objects, and the `distributions' property are helpers for the plots - they are given to the plots to specify which distribution they should use.
 	obj.updateextent();
-  } // settasks
+  } // replace
   
-  addtasks(tasks){
+  add(tasks){
 	  // Instead of replacing the data, merge the previous and the old data.
 	  let obj = this;
 	  
 	  let existingtasks = obj.tasks ? obj.tasks : [];
-	  let mergedtasks = existingtasks.concat( reformatTasks(tasks) );
+	  let newtasks = reformatTasks(tasks);
 	  
-	  obj.tasks = mergedtasks;
+	  
+	  obj.tasks = existingtasks.concat( newtasks );
+	  obj.crossfilter.add(newtasks); 
+	  
 	  
 	  obj.updateextent();
-  } // addtasks
+  } // add
   
   
   updateextent(){
