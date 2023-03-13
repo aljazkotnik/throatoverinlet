@@ -2,6 +2,12 @@ import dragDropHandler from "./support/dragDropHandler.js";
 import dataStorage from "./support/dataStorage.js";
 import CollapsibleFrame from "./support/CollapsibleFrame.js";
 
+
+// Filtering plots.
+import filterscatterplot from "./plots/filterscatterplot.js";
+import filterhistogram from "./plots/filterhistogram.js";
+
+// Flow detail plots.
 import scatterplot from "./plots/scatterplot.js";
 import linecontourplot from "./plots/linecontourplot.js";
 import linedistributionplot from "./plots/linedistributionplot.js";
@@ -32,57 +38,81 @@ coordinate.forEach(frm=>{
 }) // forEach
 
 
+// On window change the currentlz active folder should be activated again to extend it.
+window.onresize = function(){
+	coordinate.forEach(cfrm=>cfrm.update( cfrm.active ))
+} // onresize
 
 
 
 
 
-// Create plots:
-const container = details.folder;
-const plots = [];
+
+
+
+
+// How do I subscribe the regular plots to just the subset data? Do I just hardcode it so? Or do I subscribe them to it also?
+
+
 
 // Instantiate the data.
 var data = new dataStorage();
-data.globalupdate = function update(){
-	plots.forEach(p=>{
-		p.repaint()
-	}); // forEach
-} // update
+console.log(data)
+
+
+// Data storage applies the filtering also, and precomputes a subset. Whenever the subset changes the plots should repaint, but also any header titles should adjust.
+data.subset.subscribe(function(){
+	filtering.label(`(${ data.tasks.length })`)
+	details.label(`(${ data.subset.value.length })`)
+}) // subscribe
 
 
 
 
+// PLOTS
+function addPlot(p, folder){
+  folder.appendChild(p.node);
+  p.update();
+  data.plots.push(p)
+} // addPlot
+
+
+// FILTERING PLOTS.
+// Add a scatterplot as a filtering plot prototype.
+// Why do the filtering plots need to be available to filtering?
+let fsp = new filterscatterplot(data);
+addPlot(fsp, filtering.folder);
+
+let fh = new filterhistogram(data);
+addPlot(fh, filtering.folder);
+
+
+
+// FLOW DETAIL PLOTS:
 let sp = new scatterplot(data);
-container.appendChild(sp.node);
-sp.update();
-plots.push(sp)
+addPlot(sp, details.folder)
+data.subset.subscribe(function(){ sp.draw() })
 
 let lc = new linecontourplot(data);
-container.appendChild(lc.node);
-lc.update();
-plots.push(lc)
+addPlot(lc, details.folder)
+data.subset.subscribe(function(){ lc.draw() })
+
 
 let lp_mach = new linedistributionplot(data);
-container.appendChild(lp_mach.node);
-lp_mach.update();
-plots.push(lp_mach)
+addPlot(lp_mach, details.folder)
+data.subset.subscribe(function(){ lp_mach.draw() })
+
 
 let lp_camber = new linedistributionplot(data);
-container.appendChild(lp_camber.node);
-lp_camber.update();
-plots.push(lp_camber)
+addPlot(lp_camber, details.folder)
+data.subset.subscribe(function(){ lp_camber.draw() })
+
 
 let lp_theta = new linedistributionplot(data);
-container.appendChild(lp_theta.node);
-lp_theta.update();
-plots.push(lp_theta)
+addPlot(lp_theta, details.folder)
+data.subset.subscribe(function(){ lp_theta.draw() })
 
 
-
-
-
-
-console.log( data );
 
 
 
@@ -92,33 +122,34 @@ let dataLoader = new dragDropHandler();
 dataLoader.ondragdropped = function(loadeddata){
 	// This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
 	data.add(loadeddata);
-	console.log(`Current number of tasks = ${data.tasks.length}`)
+	
+	// Filtering plot
+	fsp.updatedata();
+	fh.updatedata();
 	
 	// Load the data in and assign the series.
 	sp.updatedata()
 	lc.updatedata( data.contours[0] )
 	
-	
 	lp_mach.updatedata( data.distributions[0] )
 	lp_camber.updatedata( data.distributions[1] )
 	lp_theta.updatedata( data.distributions[2] )
 	
-
-	
-	data.globalupdate();
 } // ondragdropped
 
 // DRAGGING AND DROPPING THE DATA IS A DEVELOPMENT FEATURE.
-let dragDropArea = document.getElementsByTagName("body")[0];
-dragDropArea.ondrop = (ev)=>{dataLoader.ondrop(ev)};
-dragDropArea.ondragover = (ev)=>{dataLoader.ondragover(ev)};
+document.body.ondrop = (ev)=>{dataLoader.ondrop(ev)};
+document.body.ondragover = (ev)=>{dataLoader.ondragover(ev)};
 
 
 
 
 // Turn the details on by default. At the end so that the content has some height.
-details.update(true);
+filtering.update(true);
+
+
+
 
 
 // Dev test dataset.
-dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
+// dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);

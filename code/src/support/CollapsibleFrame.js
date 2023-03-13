@@ -6,6 +6,7 @@ const templateFolder = `<div class="collapsible"></div>`;
 
 // The buttons are coordinated because all the frames are part of a 'folder' form.
 export default class CollapsibleFrame{
+  active = false;
   
   constructor(name){
     let obj = this;
@@ -30,10 +31,14 @@ export default class CollapsibleFrame{
 	if(active){
 		obj.button.classList.add("breadcrumb-active");
 		obj.folder.style.maxHeight = obj.folder.scrollHeight + "px"
+		obj.folder.style.paddingBottom = 30 + "px";
 	} else {
 		obj.button.classList.remove("breadcrumb-active");
 		obj.folder.style.maxHeight = null
+		obj.folder.style.paddingBottom = 0 + "px";
 	} // if
+	
+	obj.active = active;
 	
   } // update
   

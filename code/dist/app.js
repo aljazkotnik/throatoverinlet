@@ -102,6 +102,36 @@
     };
   }
 
+  function _superPropBase(object, property) {
+    while (!Object.prototype.hasOwnProperty.call(object, property)) {
+      object = _getPrototypeOf(object);
+      if (object === null) break;
+    }
+
+    return object;
+  }
+
+  function _get(target, property, receiver) {
+    if (typeof Reflect !== "undefined" && Reflect.get) {
+      _get = Reflect.get;
+    } else {
+      _get = function _get(target, property, receiver) {
+        var base = _superPropBase(target, property);
+
+        if (!base) return;
+        var desc = Object.getOwnPropertyDescriptor(base, property);
+
+        if (desc.get) {
+          return desc.get.call(receiver);
+        }
+
+        return desc.value;
+      };
+    }
+
+    return _get(target, property, receiver || target);
+  }
+
   var dragDropHandler = /*#__PURE__*/function () {
     function dragDropHandler() {
       _classCallCheck(this, dragDropHandler);
@@ -2075,12 +2105,91 @@
         : 0x100000000;
   }
 
+  function html2element(html) {
+    var template = document.createElement('template');
+    template.innerHTML = html.trim(); // Never return a text node of whitespace as the result
+
+    return template.content.firstChild;
+  } // html2element
+
+  function calculateExponent(val) {
+    // calculate the exponent for the scientific notation.
+    var exp = 0;
+
+    while (Math.floor(Math.abs(val) / Math.pow(10, exp + 1)) > 0) {
+      exp += 1;
+    } // Convert the exponent to multiple of three
+
+
+    return Math.floor(exp / 3) * 3;
+  } // 
+  // From regular helpers.
+
+  function unique(d) {
+    // https://stackoverflow.com/questions/1960473/get-all-unique-values-in-a-javascript-array-remove-duplicates
+    function onlyUnique(value, index, self) {
+      return self.indexOf(value) === index;
+    } // unique
+
+
+    return d.filter(onlyUnique);
+  } // unique
+
+  var ObservableVariable = /*#__PURE__*/function () {
+    function ObservableVariable(initialvalue) {
+      _classCallCheck(this, ObservableVariable);
+
+      this._value = undefined;
+      this.subscribers = [];
+      var obj = this;
+      obj._value = initialvalue;
+    } // constructor
+
+
+    _createClass(ObservableVariable, [{
+      key: "value",
+      get: // set value
+      function get() {
+        return this._value;
+      } // get value
+      ,
+      set: function set(v) {
+        var obj = this;
+        obj._value = v;
+        obj.update();
+      }
+    }, {
+      key: "subscribe",
+      value: function subscribe(f) {
+        var obj = this;
+        obj.subscribers.push(f);
+      } // subscribe
+
+    }, {
+      key: "update",
+      value: function update() {
+        var obj = this;
+        obj.subscribers.forEach(function (f) {
+          f();
+        }); // forEach
+      } // update
+
+    }]);
+
+    return ObservableVariable;
+  }(); // ObservableVariable
+
   var dataStorage = /*#__PURE__*/function () {
+    // Filtering
     // Highlighting
+    // Detail plot accessors.
+    // Plots need to be held by the data, because in the case a plot variable is changed the relevant filter needs to be removed.
     function dataStorage() {
       _classCallCheck(this, dataStorage);
 
-      this._tasks = undefined;
+      this.tasks = [];
+      this.filters = {};
+      this.subset = new ObservableVariable([]);
       this.currentlocked = false;
       this.current = undefined;
       this.datum = undefined;
@@ -2110,24 +2219,114 @@
           return d.contour["mach"];
         }
       }];
+      this.plots = [];
       var obj = this; // Initiate a crossfilter object.
 
-      obj.crossfilter = crossfilter();
+      obj.crossfilter = crossfilter(); // And initiate a general dimension. Does this one get trimmed immediately?
+
+      obj.taskdim = obj.crossfilter.dimension(function (d) {
+        return d.taskId;
+      });
     } // constructor
-    // Access the data.
+    // Function that allows plots to trigger general updates.
 
 
     _createClass(dataStorage, [{
-      key: "tasks",
-      get: function get() {
+      key: "repaint",
+      value: function repaint() {
         var obj = this;
-        return obj._tasks;
-      } // DATA IMPORT
-      ,
-      set: function set(d) {
+        obj.plots.forEach(function (p) {
+          p.repaint();
+        }); // forEach
+      } // repaint
+
+      /* FILTERING
+         What should happen when the plot sets a dimension, but then the user navigates away. Should the selection persist, or should that filter be removed? I think removed. But this means that dataStorage must listen to variable changes. Maybe that's the simplest way - just monitor active dimensions all the time.
+      */
+
+    }, {
+      key: "filtertrim",
+      value: function filtertrim() {
+        // Check which filtering dimensions are still valid.
+        var obj = this; // Check which filters are still active. This should be only for plots that support filtering though...
+
+        var plotvariables = obj.plots.reduce(function (acc, p) {
+          var xname = p.svgobj.x.variable.name;
+          var yname = p.svgobj.y.variable.name;
+          return acc.concat([xname, yname].filter(function (n) {
+            return n;
+          }));
+        }, []); // reduce
+
+        var admissiblefiltervariables = unique(plotvariables); // Now go through the dimensions and delete anz dimensions that are no longer needed. These are dimensions that do not appear as plot variables.
+
+        for (var dimensionname in obj.filters) {
+          if (!admissiblefiltervariables.includes(dimensionname)) {
+            obj.filters[dimensionname].dim.filterAll();
+            delete obj.filters[dimensionname];
+          } // if
+
+        } // for
+
+
+        obj.filterupdate();
+      } // filtertrim
+
+    }, {
+      key: "filterapply",
+      value: function filterapply(variablename, interval) {
+        var obj = this; // In some cases this function can be called with an undefined variablename, but a defined interval.
+        // Loop through the filters and either create additional dimensions, or set the desired interval range to existing dimensions.
+
+        if (variablename && !obj.filters[variablename]) {
+          // The range is required so that plots can access the data required to update their brushes.
+          filterset = {
+            range: interval,
+            dim: obj.crossfilter.dimension(function (d) {
+              return d.metadata[variablename];
+            })
+          };
+          obj.filters[variablename] = filterset;
+        } // if
+        // Now if the correct filterset is defined apply hte filter.
+
+
+        var filterset = obj.filters[variablename];
+
+        if (filterset) {
+          filterset.range = interval;
+          filterset.dim.filter(function (d) {
+            return d >= interval[0] && d <= interval[1];
+          }); // filter
+
+          obj.filterupdate();
+        } // if
+
+      } // filterapply
+
+    }, {
+      key: "filterremove",
+      value: function filterremove(variablename) {
         var obj = this;
-        obj._tasks = d;
-      }
+        var filterset = obj.filters[variablename];
+
+        if (filterset) {
+          filterset.range = [0, 0];
+          filterset.dim.filterAll();
+          obj.filterupdate();
+        } // if
+
+      } // filterremove
+
+    }, {
+      key: "filterupdate",
+      value: function filterupdate() {
+        // Pre-save a crossfilter query.
+        var obj = this;
+        obj.subset.value = obj.taskdim.top(Infinity);
+      } // filterupdate
+      // DATA IMPORT
+
     }, {
       key: "replace",
       value: function replace(tasks) {
@@ -2144,12 +2343,30 @@
       value: function add(tasks) {
         // Instead of replacing the data, merge the previous and the old data.
         var obj = this;
-        var existingtasks = obj.tasks ? obj.tasks : [];
+        var existingtasks = obj.tasks;
         var newtasks = reformatTasks(tasks);
         obj.tasks = existingtasks.concat(newtasks);
         obj.crossfilter.add(newtasks);
+        obj.updatevariablenames();
         obj.updateextent();
       } // add
+
+    }, {
+      key: "updatevariablenames",
+      value: function updatevariablenames() {
+        // The variables objects cannot be created here! The variables objects NEED (!) to be created in the plots themselves, as the axis extents, and the variable extents by extension, need to be updated for each plot separately. But the available variablenames can be determined here.
+        var obj = this;
+
+        if (obj.tasks) {
+          // `dr' and `name' are the only allowed strings. dr is the filepath to the original data on Demetrios' machine.
+          obj.variablenames = Object.keys(obj.tasks[0].metadata).filter(function (name) {
+            return !["dr", "name"].includes(name);
+          });
+        } else {
+          obj.variablenames = [];
+        } // if
+
+      } // updatevariablenames
 
     }, {
       key: "updateextent",
@@ -2205,7 +2422,7 @@
           obj.currentlocked = false;
         } // if
 
-      } // toggledatum
+      } // selecttask
 
     }, {
       key: "setcurrent",
@@ -2415,25 +2632,6 @@
     return lines;
   } // matlabContour2drawLines
 
-  function html2element(html) {
-    var template = document.createElement('template');
-    template.innerHTML = html.trim(); // Never return a text node of whitespace as the result
-
-    return template.content.firstChild;
-  } // html2element
-
-  function calculateExponent(val) {
-    // calculate the exponent for the scientific notation.
-    var exp = 0;
-
-    while (Math.floor(Math.abs(val) / Math.pow(10, exp + 1)) > 0) {
-      exp += 1;
-    } // Convert the exponent to multiple of three
-
-
-    return Math.floor(exp / 3) * 3;
-  } // calculateExponent
-
   var templateButton = "<button class=\"breadcrumb\"></button>";
   var templateFolder = "<div class=\"collapsible\"></div>"; // The buttons are coordinated because all the frames are part of a 'folder' form.
 
@@ -2441,6 +2639,7 @@
     function CollapsibleFrame(name) {
       _classCallCheck(this, CollapsibleFrame);
 
+      this.active = false;
       var obj = this;
       obj.button = html2element(templateButton);
       obj.folder = html2element(templateFolder); // Keep name to allow construction of labels later on.
@@ -2458,11 +2657,15 @@
         if (active) {
           obj.button.classList.add("breadcrumb-active");
           obj.folder.style.maxHeight = obj.folder.scrollHeight + "px";
+          obj.folder.style.paddingBottom = 30 + "px";
         } else {
           obj.button.classList.remove("breadcrumb-active");
           obj.folder.style.maxHeight = null;
+          obj.folder.style.paddingBottom = 0 + "px";
         } // if
 
+
+        obj.active = active;
       } // update
 
     }, {
@@ -2546,6 +2749,25 @@
   const bisectRight = ascendingBisect.right;
   bisector(number$2).center;
 
+  function count(values, valueof) {
+    let count = 0;
+    if (valueof === undefined) {
+      for (let value of values) {
+        if (value != null && (value = +value) >= value) {
+          ++count;
+        }
+      }
+    } else {
+      let index = -1;
+      for (let value of values) {
+        if ((value = valueof(value, ++index, values)) != null && (value = +value) >= value) {
+          ++count;
+        }
+      }
+    }
+    return count;
+  }
+
   function extent(values, valueof) {
     let min;
     let max;
@@ -2574,6 +2796,20 @@
       }
     }
     return [min, max];
+  }
+
+  function identity$5(x) {
+    return x;
+  }
+
+  var array$1 = Array.prototype;
+
+  var slice$1 = array$1.slice;
+
+  function constant$3(x) {
+    return function() {
+      return x;
+    };
   }
 
   var e10 = Math.sqrt(50),
@@ -2629,6 +2865,141 @@
     else if (error >= e5) step1 *= 5;
     else if (error >= e2) step1 *= 2;
     return stop < start ? -step1 : step1;
+  }
+
+  function nice$1(start, stop, count) {
+    let prestep;
+    while (true) {
+      const step = tickIncrement(start, stop, count);
+      if (step === prestep || step === 0 || !isFinite(step)) {
+        return [start, stop];
+      } else if (step > 0) {
+        start = Math.floor(start / step) * step;
+        stop = Math.ceil(stop / step) * step;
+      } else if (step < 0) {
+        start = Math.ceil(start * step) / step;
+        stop = Math.floor(stop * step) / step;
+      }
+      prestep = step;
+    }
+  }
+
+  function thresholdSturges(values) {
+    return Math.ceil(Math.log(count(values)) / Math.LN2) + 1;
+  }
+
+  function bin() {
+    var value = identity$5,
+        domain = extent,
+        threshold = thresholdSturges;
+
+    function histogram(data) {
+      if (!Array.isArray(data)) data = Array.from(data);
+
+      var i,
+          n = data.length,
+          x,
+          values = new Array(n);
+
+      for (i = 0; i < n; ++i) {
+        values[i] = value(data[i], i, data);
+      }
+
+      var xz = domain(values),
+          x0 = xz[0],
+          x1 = xz[1],
+          tz = threshold(values, x0, x1);
+
+      // Convert number of thresholds into uniform thresholds, and nice the
+      // default domain accordingly.
+      if (!Array.isArray(tz)) {
+        const max = x1, tn = +tz;
+        if (domain === extent) [x0, x1] = nice$1(x0, x1, tn);
+        tz = ticks(x0, x1, tn);
+
+        // If the last threshold is coincident with the domain’s upper bound, the
+        // last bin will be zero-width. If the default domain is used, and this
+        // last threshold is coincident with the maximum input value, we can
+        // extend the niced upper bound by one tick to ensure uniform bin widths;
+        // otherwise, we simply remove the last threshold. Note that we don’t
+        // coerce values or the domain to numbers, and thus must be careful to
+        // compare order (>=) rather than strict equality (===)!
+        if (tz[tz.length - 1] >= x1) {
+          if (max >= x1 && domain === extent) {
+            const step = tickIncrement(x0, x1, tn);
+            if (isFinite(step)) {
+              if (step > 0) {
+                x1 = (Math.floor(x1 / step) + 1) * step;
+              } else if (step < 0) {
+                x1 = (Math.ceil(x1 * -step) + 1) / -step;
+              }
+            }
+          } else {
+            tz.pop();
+          }
+        }
+      }
+
+      // Remove any thresholds outside the domain.
+      var m = tz.length;
+      while (tz[0] <= x0) tz.shift(), --m;
+      while (tz[m - 1] > x1) tz.pop(), --m;
+
+      var bins = new Array(m + 1),
+          bin;
+
+      // Initialize bins.
+      for (i = 0; i <= m; ++i) {
+        bin = bins[i] = [];
+        bin.x0 = i > 0 ? tz[i - 1] : x0;
+        bin.x1 = i < m ? tz[i] : x1;
+      }
+
+      // Assign data to bins by value, ignoring any outside the domain.
+      for (i = 0; i < n; ++i) {
+        x = values[i];
+        if (x0 <= x && x <= x1) {
+          bins[bisectRight(tz, x, 0, m)].push(data[i]);
+        }
+      }
+
+      return bins;
+    }
+
+    histogram.value = function(_) {
+      return arguments.length ? (value = typeof _ === "function" ? _ : constant$3(_), histogram) : value;
+    };
+
+    histogram.domain = function(_) {
+      return arguments.length ? (domain = typeof _ === "function" ? _ : constant$3([_[0], _[1]]), histogram) : domain;
+    };
+
+    histogram.thresholds = function(_) {
+      return arguments.length ? (threshold = typeof _ === "function" ? _ : Array.isArray(_) ? constant$3(slice$1.call(_)) : constant$3(_), histogram) : threshold;
+    };
+
+    return histogram;
+  }
+
+  function max(values, valueof) {
+    let max;
+    if (valueof === undefined) {
+      for (const value of values) {
+        if (value != null
+            && (max < value || (max === undefined && value >= value))) {
+          max = value;
+        }
+      }
+    } else {
+      let index = -1;
+      for (let value of values) {
+        if ((value = valueof(value, ++index, values)) != null
+            && (max < value || (max === undefined && value >= value))) {
+          max = value;
+        }
+      }
+    }
+    return max;
   }
 
   var slice = Array.prototype.slice;
@@ -6953,20 +7324,20 @@
     btnDanger: "\n\t  background-color: crimson;\n\t  color: white;\n\t  float: right;\n    "
   }; // css
 
-  var template$6 = "\n\t<div style=\"".concat(css.card, "\">\n\t\t<div class=\"card-header\" style=\"").concat(css.cardHeader, "\">\n\t\t\t<input class=\"card-title\" spellcheck=\"false\"  style=\"").concat(css.plotTitle, "\" value=\"New Plot\">\n\t\t</div>\n\t\t\n\t\t<div class=\"card-body\">\n\t\t\n\t\t</div>\n\t</div>\n"); // template
+  var template$9 = "\n\t<div style=\"".concat(css.card, "\">\n\t\t<div class=\"card-header\" style=\"").concat(css.cardHeader, "\">\n\t\t\t<input class=\"card-title\" spellcheck=\"false\"  style=\"").concat(css.plotTitle, "\" value=\"New Plot\">\n\t\t</div>\n\t\t\n\t\t<div class=\"card-body\">\n\t\t\n\t\t</div>\n\t</div>\n"); // template
 
   var plotframe = function plotframe() {
     _classCallCheck(this, plotframe);
 
     var obj = this;
-    obj.node = html2element(template$6);
+    obj.node = html2element(template$9);
   } // constructor	
   ;
    // plotframe
 
   var variablemenustyle = "\n  background-color: white;\n  border: 2px solid black;\n  border-radius: 5px;\n  display: none; \n  position: absolute;\n  max-height: 120px;\n  overflow-y: auto;\n";
   var ulstyle = "\n  list-style-type: none;\n  font-size: 10px;\n  font-weight: bold;\n  padding-left: 4px;\n  padding-right: 4px;\n";
-  var template$5 = "\n<div class=\"variable-select-menu\" style=\"".concat(variablemenustyle, "\">\n  <ul style=\"").concat(ulstyle, "\">\n  </ul>\n</div>\n"); // Differentite between an x and a y one.
+  var template$8 = "\n<div class=\"variable-select-menu\" style=\"".concat(variablemenustyle, "\">\n  <ul style=\"").concat(ulstyle, "\">\n  </ul>\n</div>\n"); // Differentite between an x and a y one.
 
   var divSelectMenu = /*#__PURE__*/function () {
     function divSelectMenu(axis) {
@@ -6978,7 +7349,7 @@
         extent: [1, 1]
       };
       var obj = this;
-      obj.node = html2element(template$5);
+      obj.node = html2element(template$8);
 
       obj.node.onclick = function (event) {
         return event.stopPropagation();
@@ -7047,11 +7418,11 @@
   scales
   */
 
-  var textattributes = "fill=\"black\" font-size=\"10px\" font-weight=\"bold\"";
-  var exponenttemplate = "\n<text class=\"linear\" ".concat(textattributes, ">\n\t<tspan>\n\t  x10\n\t  <tspan class=\"exp\" dy=\"-5\"></tspan>\n\t</tspan>\n</text>\n");
-  var logtemplate = "\n<text class=\"log\" ".concat(textattributes, " display=\"none\">\n\t<tspan>\n\t  log\n\t  <tspan class=\"base\" dy=\"5\">10</tspan>\n\t  <tspan class=\"eval\" dy=\"-5\">(x)</tspan>\n\t</tspan>\n</text>\n"); // text -> x="-8" / y="-0.32em"
+  var textattributes$1 = "fill=\"black\" font-size=\"10px\" font-weight=\"bold\"";
+  var exponenttemplate$1 = "\n<text class=\"linear\" ".concat(textattributes$1, ">\n\t<tspan>\n\t  x10\n\t  <tspan class=\"exp\" dy=\"-5\"></tspan>\n\t</tspan>\n</text>\n");
+  var logtemplate$1 = "\n<text class=\"log\" ".concat(textattributes$1, " display=\"none\">\n\t<tspan>\n\t  log\n\t  <tspan class=\"base\" dy=\"5\">10</tspan>\n\t  <tspan class=\"eval\" dy=\"-5\">(x)</tspan>\n\t</tspan>\n</text>\n"); // text -> x="-8" / y="-0.32em"
 
-  var template$4 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate, "\n\t\t").concat(logtemplate, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
+  var template$7 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate$1, "\n\t\t").concat(logtemplate$1, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes$1, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes$1, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes$1, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
   // Now I need to add in a label saying linear/log
   // DONE!! Maybe a plus/minus next to the axes to increase the axis limits - instead of dragging the labels.
   // The changing between the variables is done in the parent, and not in the axis. This is simply because this class only controls it's own node, and there isn't space to show all the options. Therefore the parent must allocate the space for the change of variables.
@@ -7079,7 +7450,7 @@
 
       var obj = this; // make the axis group.
 
-      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$4);
+      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$7);
       obj.node = obj.d3node.node(); // Get rid of axis by abstracting?
 
       obj.axis = axis;
@@ -7469,7 +7840,7 @@
   exponent  : power exponent (big number labels may overlap otherwise)
   */
 
-  var template$3 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<rect class=\"zoom-area\" fill=\"rgb(255, 255, 255)\" width=\"400\" height=\"400\"></rect>\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"markup\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n"; // The axis scale needs to have access to the data and to the svg dimensions. Actually not access to the data, but access to the data extent. This has been solved by adding calculated extents to the variable objects.
+  var template$6 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<rect class=\"zoom-area\" fill=\"rgb(255, 255, 255)\" width=\"400\" height=\"400\"></rect>\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"markup\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n"; // The axis scale needs to have access to the data and to the svg dimensions. Actually not access to the data, but access to the data extent. This has been solved by adding calculated extents to the variable objects.
   // It's best to just pass all the variables to the axis, and let it handle everything connected to it. 
   // This class is a template for two interactive axes svg based plotting.
   // Handle the variable changing here!!!
@@ -7483,7 +7854,7 @@
       this.width = 400;
       this.height = 400;
       var obj = this;
-      obj.node = html2element(template$3); // Make the axis objects, and connect them to the menu selection.
+      obj.node = html2element(template$6); // Make the axis objects, and connect them to the menu selection.
       // `obj.plotbox' specifies the area of the SVG that the chart should be drawn to.
       // Variables must be set later.
 
@@ -7712,13 +8083,12 @@
     return variableobj;
   }(); // variableobj
 
-  var template$2 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"scatterplot\"></div>\n</div>\n";
+  var template$5 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"scatterplot\"></div>\n</div>\n";
 
   var scatterplot = /*#__PURE__*/function (_plotframe) {
     _inherits(scatterplot, _plotframe);
 
-    var _super = _createSuper(scatterplot); // Gets replaced by the actual data object.
-
+    var _super = _createSuper(scatterplot);
 
     function scatterplot(data) {
       var _this;
@@ -7727,18 +8097,13 @@
 
       _this = _super.call(this);
       _this.width = 400;
-      _this.data = {
-        current: undefined,
-        datum: undefined,
-        tasks: undefined
-      };
 
       var obj = _assertThisInitialized(_this);
 
       obj.data = data; // Append the plot backbone.
 
       var container = obj.node.querySelector("div.card-body");
-      container.appendChild(html2element(template$2)); // Add a scatterplot inset. When initialising already pass in the card size.
+      container.appendChild(html2element(template$5)); // Add a scatterplot inset. When initialising already pass in the card size.
 
       obj.svgobj = new twoInteractiveAxesInset([]);
       container.querySelector("div.scatterplot").appendChild(obj.svgobj.node);
@@ -7749,14 +8114,14 @@
       // Change the initial title
 
 
-      obj.node.querySelector("input.card-title").value = "Metadata";
+      obj.node.querySelector("input.card-title").value = "Scatterplot";
       return _this;
     } // constructor
 
 
     _createClass(scatterplot, [{
       key: "update",
-      value: function update(tasks) {
+      value: function update() {
         // Update this plot.
         var obj = this;
         obj.svgobj.update();
@@ -7767,23 +8132,14 @@
       key: "updatedata",
       value: function updatedata() {
         var obj = this;
-        var variables;
-
-        if (obj.data.tasks) {
-          // `dr' and `name' are the only allowed strings. dr is the filepath to the original data on Demetrios' machine.
-          variables = Object.getOwnPropertyNames(obj.data.tasks[0].metadata).filter(function (name) {
-            return !["dr", "name"].includes(name);
-          }).map(function (name) {
-            return new variableobj({
-              name: name,
-              extent: extent(obj.data.tasks, function (t) {
-                return t.metadata[name];
-              })
-            }); // new variableobj
-          });
-        } // if
-
-
+        var variables = obj.data.variablenames.map(function (name) {
+          return new variableobj({
+            name: name,
+            extent: extent(obj.data.tasks, function (t) {
+              return t.metadata[name];
+            })
+          }); // new variableobj
+        });
         obj.svgobj.update(variables);
         obj.draw();
       } // updatedata
@@ -7791,44 +8147,37 @@
     }, {
       key: "getcolor",
       value: function getcolor(d, defaultcolor) {
-        var obj = this; // If a current is prescribed, then any other ones should be gray.
-        // If a current is prescribed
+        var obj = this; // Just add in a condition that if the point is outside of the filter it should be gainsboro.
 
         var c = obj.data.current ? obj.data.current == d ? defaultcolor : "gainsboro" : defaultcolor;
         c = obj.data.datum == d ? "orange" : c;
         return c;
       } // getcolor
+      // Create teh actual SVG elements.
 
     }, {
       key: "draw",
       value: function draw() {
         // config:  data, gclass, color, showline.
         var obj = this;
+        var circles = select(obj.node).select("g.data").selectAll("circle").data(obj.data.subset.value); // First exit.
 
-        if (obj.data.tasks) {
-          var circles = select(obj.node).select("g.data").selectAll("circle").data(obj.data.tasks); // First exit.
+        circles.exit().remove(); // Finally add new circles.
 
-          circles.exit().remove(); // Finally add new circles.
-
-          circles.enter().append("circle").attr("r", 5).attr("cx", -10).attr("cy", -10).on("mouseenter", function (e, d) {
-            // obj.data.current = d;
-            obj.data.setcurrent(d);
-            obj.refresh();
-            obj.data.globalupdate();
-          }).on("mouseout", function (e, d) {
-            // obj.data.current = undefined;
-            obj.data.setcurrent(undefined);
-            obj.refresh();
-            obj.data.globalupdate();
-          }).on("click", function (e, d) {
-            // obj.data.datum = obj.data.datum == d ? undefined : d;
-            obj.data.selecttask(d);
-            obj.refresh();
-            obj.data.globalupdate();
-          });
-          obj.refresh();
-        } // if
-
+        circles.enter().append("circle").attr("r", 5).attr("cx", -10).attr("cy", -10).on("mouseenter", function (e, d) {
+          // obj.data.current = d;
+          obj.data.setcurrent(d);
+          obj.data.repaint();
+        }).on("mouseout", function (e, d) {
+          // obj.data.current = undefined;
+          obj.data.setcurrent(undefined);
+          obj.data.repaint();
+        }).on("click", function (e, d) {
+          // obj.data.datum = obj.data.datum == d ? undefined : d;
+          obj.data.selecttask(d);
+          obj.data.repaint();
+        });
+        obj.refresh();
       } // draw
       // Try to implement a smaller update possibility to try and improve interactivity.
 
@@ -7851,6 +8200,7 @@
         } // if	
 
       } // repaint
+      // Reposition and repaint the circles.
 
     }, {
       key: "refresh",
@@ -7874,6 +8224,928 @@
 
     return scatterplot;
   }(plotframe); // scatterplot
+
+  var brush = /*#__PURE__*/function () {
+    function brush(svg, g, type) {
+      _classCallCheck(this, brush);
+
+      this.p0 = [0, 0];
+      this.p1 = [0, 0]; // Both svg and g should be d3.select(node). Furthermore, allow functionality modes.
+
+      var obj = this;
+      obj.svg = svg;
+      obj.type = ["horizontal", "vertical", "2d"].includes(type) ? type : "2d"; // Extend to pass in both interaction and element hosts.
+
+      obj.rect = g.append("rect").attr("x", 0).attr("y", 0).attr("width", 0).attr("height", 0).attr("fill", "gray").attr("opacity", 0.4);
+      var active = false;
+      svg.addEventListener("mousedown", function (e) {
+        // Store start point.
+        obj.p0 = pointer(e);
+        obj.p1 = pointer(e);
+        active = true;
+      }); // mousedown
+
+      svg.addEventListener("mousemove", function (e) {
+        // Update the end point. Interactively update teh filters.
+        if (active) {
+          obj.p1 = pointer(e);
+          obj.update();
+        } // if
+
+      }); // mousemove
+
+      svg.addEventListener("mouseup", function (e) {
+        // If the points are too close together then the interval should be teh variable extent. Or the filter should be cleared.
+        if (dist(obj.p0, obj.p1) < Math.pow(5, 2)) {
+          obj.clear();
+        } else {
+          obj.submit();
+        } // if
+
+
+        active = false;
+      }); // mouseup
+      obj.rect.node();
+      /* THIS IS QUITE COMPLICATED!!!
+      rect.addEventListener("mousedown", function(e){
+      	e.stopPropagation();
+      	// If the user clicked on the rectangle, then the rectangle should be adjusted, as opposed to made from scratch.
+      	let box = rect.getBoundingClientRect();
+      	let point = [e.clientX - box.x, e.clientY - box.y];
+      	// console.log("edit", [point[0]/box.width, point[1]/box.height])
+      })
+         */
+    } // constructor
+
+
+    _createClass(brush, [{
+      key: "update",
+      value: function update(x, y, w, h) {
+        var obj = this; // Allow inputs to update brush.
+
+        var xd = x ? x : Math.min(obj.p0[0], obj.p1[0]);
+        var yd = y ? y : Math.min(obj.p0[1], obj.p1[1]);
+        var wd = w ? w : Math.abs(obj.p0[0] - obj.p1[0]);
+        var hd = h ? h : Math.abs(obj.p0[1] - obj.p1[1]); // For some brush types the width/height has to be set to the svg width/height.
+
+        var b = obj.svg.getBBox();
+        var xdt = obj.type == "vertical" ? 0 : xd;
+        var ydt = obj.type == "horizontal" ? 0 : yd;
+        var wdt = obj.type == "vertical" ? b.width : wd;
+        var hdt = obj.type == "horizontal" ? b.height : hd; // console.log( xdt,ydt,wdt,hdt )
+
+        obj.rect.attr("x", xdt).attr("y", ydt).attr("width", wdt).attr("height", hdt);
+      } // update
+      // Dummy functions to allow behavior to be prescribed.
+
+    }, {
+      key: "clear",
+      value: function clear() {} // clear
+
+    }, {
+      key: "submit",
+      value: function submit() {} // submit
+
+    }]);
+
+    return brush;
+  }(); // brush
+
+  function dist(a, b) {
+    return Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2);
+  } // dist
+
+  /*
+  Needs to update hte filtering dimensions. But also the dimensions should be dynamic?
+  How many dimensions will crossfilter support?
+
+
+  Filtering plots should highlight the filter setting - this is different functionality than comparison plots!!
+  But both could be combined!!
+  */
+
+  var filterscatterplot = /*#__PURE__*/function (_scatterplot) {
+    _inherits(filterscatterplot, _scatterplot);
+
+    var _super = _createSuper(filterscatterplot);
+
+    function filterscatterplot(data) {
+      var _this;
+
+      _classCallCheck(this, filterscatterplot);
+
+      _this = _super.call(this, data);
+
+      var obj = _assertThisInitialized(_this); // Add functionality to draw a rectangle... How will this be done since the scatterplot has to support zoom... For now the zoom can be disabled by removing the rectangle hosting it.
+
+
+      select(obj.svgobj.node).select("g.background").select("rect.zoom-area").remove(); // Now add the drawing of the box.
+
+      var svg = obj.svgobj.node.querySelector("svg");
+      var g = select(svg).select("g.markup");
+      obj.brush = new brush(svg, g, "2d");
+
+      obj.brush.clear = function () {
+        // Clear the filter
+        obj.data.filterremove(obj.svgobj.x.variable.name);
+        obj.data.filterremove(obj.svgobj.y.variable.name);
+      }; // clear
+
+
+      obj.brush.submit = function () {
+        // Apply the filter
+        var intervals = obj.calculateIntervals();
+        obj.data.filterapply(obj.svgobj.x.variable.name, intervals[0]);
+        obj.data.filterapply(obj.svgobj.y.variable.name, intervals[1]);
+      }; // submit
+      // Changing the variable on the axis should remove the filter, as it is no longer visible.
+
+
+      obj.svgobj.onupdate = function () {
+        obj.refresh();
+        obj.data.filtertrim();
+      }; // onupdate
+      // Subscribe the plot to any changes of the subset.
+
+
+      obj.data.subset.subscribe(function () {
+        obj.repaint();
+      }); // subscribe
+
+      return _this;
+    } // constructor
+
+
+    _createClass(filterscatterplot, [{
+      key: "repaint",
+      value: function repaint() {
+        // On user interactions the data is merely repainted, and not replaced to accelerate interactions. But the brushes do need to be updated.
+        _get(_getPrototypeOf(filterscatterplot.prototype), "repaint", this).call(this);
+
+        var obj = this; // Update the brush. But only show it if one of the ranges is defined.
+
+        var x = obj.data.filters[obj.svgobj.x.variable.name];
+        var y = obj.data.filters[obj.svgobj.y.variable.name];
+
+        if (x || y) {
+          var xrange = x ? x.range : obj.svgobj.x.variable.extent;
+          var yrange = y ? y.range : obj.svgobj.y.variable.extent;
+          obj.updateBrush([xrange, yrange]);
+        } // if
+
+      } // repaint
+
+    }, {
+      key: "calculateIntervals",
+      value: function calculateIntervals() {
+        // Calculate the intervals having been given two diagonally opposing points. The returned intervals should be in data units.
+        var obj = this;
+        var x = [obj.brush.p0[0], obj.brush.p1[0]];
+        var y = [obj.brush.p0[1], obj.brush.p1[1]];
+        return [x.map(function (v) {
+          return obj.svgobj.x.scale.invert(v);
+        }).sort(), y.map(function (v) {
+          return obj.svgobj.y.scale.invert(v);
+        }).sort()];
+      } // calculateIntervals
+
+    }, {
+      key: "updateBrush",
+      value: function updateBrush(intervals) {
+        var obj = this;
+        var x = obj.svgobj.x.scale;
+        var y = obj.svgobj.y.scale; // Note that the y-axis is inverted by default, so a high variable value converts to a small pixel value. Furthermore, the top left corner of the rectangle will be at the maximum value of the interval.
+
+        obj.brush.update(x(intervals[0][0]), y(intervals[1][1]), x(intervals[0][1]) - x(intervals[0][0]), y(intervals[1][0]) - y(intervals[1][1])); // console.log("width", intervals[0], x(intervals[0][1]) > x(intervals[0][0]) )
+        // console.log("height", intervals[1], y(intervals[1][0]) > y(intervals[1][1]) )
+      } // updateBrush
+
+    }]);
+
+    return filterscatterplot;
+  }(scatterplot); // filterscatterplot
+   // calculateRange
+
+  /* I want to support:
+   - linear		: scaleLinear
+   - logarithmic	: scaleLog - must not cross 0!!
+   
+   And variable types:
+   - number       : can be used as is.
+   - datetime		: scaleTime() 
+  		.domain([new Date(2000, 0, 1), new Date(2000, 0, 2)])
+  		.range([0, 960]);
+  scales
+  */
+
+  var textattributes = "fill=\"black\" font-size=\"10px\" font-weight=\"bold\"";
+  var exponenttemplate = "\n<text class=\"linear\" ".concat(textattributes, ">\n\t<tspan>\n\t  x10\n\t  <tspan class=\"exp\" dy=\"-5\"></tspan>\n\t</tspan>\n</text>\n");
+  var logtemplate = "\n<text class=\"log\" ".concat(textattributes, " display=\"none\">\n\t<tspan>\n\t  log\n\t  <tspan class=\"base\" dy=\"5\">10</tspan>\n\t  <tspan class=\"eval\" dy=\"-5\">(x)</tspan>\n\t</tspan>\n</text>\n"); // text -> x="-8" / y="-0.32em"
+
+  var template$4 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate, "\n\t\t").concat(logtemplate, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
+  // Now I need to add in a label saying linear/log
+  // DONE!! Maybe a plus/minus next to the axes to increase the axis limits - instead of dragging the labels.
+  // The changing between the variables is done in the parent, and not in the axis. This is simply because this class only controls it's own node, and there isn't space to show all the options. Therefore the parent must allocate the space for the change of variables.
+  // How to change between the scale interpretations? What should I click? Maybe the exponent text? But then it should always be visible. Let's try that yes. But how to differentiate between clicking on hte text, and editing the text??
+
+  var StaticOrdinalAxis = /*#__PURE__*/function () {
+    // These margins are required to completely fit the scales along with their labels, ticks and domain lines onto the plot.
+    function StaticOrdinalAxis(axis, plotbox) {
+      _classCallCheck(this, StaticOrdinalAxis);
+
+      this._type = "linear";
+      this.ticks = undefined;
+      this.variable = {
+        name: "N",
+        extent: [1, 1]
+      };
+      this.domain = [1, 1];
+      this.supportedtypes = ["linear", "log"];
+      this.margin = {
+        top: 30,
+        right: 30,
+        bottom: 40,
+        left: 40
+      };
+      /* `axis' is a flag that signals whether it should be a vertical or horizontal axis, `svgbbox' allows the axis to be appropriately positioned, and therefore define the plotting area, and `ordinalvariable' is a dbslice ordinal variable which is paired with this axis. */
+
+      var obj = this; // make the axis group.
+
+      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$4);
+      obj.node = obj.d3node.node(); // Get rid of axis by abstracting?
+
+      obj.axis = axis;
+      obj.setplotbox(plotbox); // Add the functionality to the domain change.
+
+      var controls = obj.d3node.select("g.domain-controls");
+      controls.select("text.plus").on("click", function () {
+        obj.plusdomain();
+        obj.update();
+      });
+      controls.select("text.minus").on("click", function () {
+        obj.minusdomain();
+        obj.update();
+      }); // Add teh functionality to toggle the axis type.
+
+      var exponent = obj.d3node.select("g.model-controls");
+      exponent.on("click", function () {
+        obj.incrementtype();
+        obj.update();
+      });
+    } // constructor
+
+
+    _createClass(StaticOrdinalAxis, [{
+      key: "update",
+      value: function update() {
+        var obj = this;
+        obj.position();
+        obj.draw();
+        obj.onupdate();
+      } // update
+      // Dummy function to allow updates on user interactions.
+
+    }, {
+      key: "onupdate",
+      value: function onupdate() {} // onupdate
+      // Drawing of the svg axes.
+
+    }, {
+      key: "position",
+      value: function position() {
+        // If the range changes, then the location of the axes must change also. And with them the exponents should change location.
+        var obj = this; // Position the axis. This will impact all of the following groups that are within the axes group.
+
+        var ax = obj.axis == "y" ? obj.margin.left : 0;
+        var ay = obj.axis == "y" ? 0 : obj.plotbox.y[1] - obj.margin.bottom;
+        obj.d3node.attr("transform", "translate(".concat(ax, ", ").concat(ay, ")")); // Reposition hte exponent.
+
+        var model = obj.d3node.select("g.model-controls");
+        model.attr("text-anchor", obj.axis == "y" ? "start" : "end");
+        var mx = obj.axis == "y" ? 0 + 6 : obj.range[1];
+        var my = obj.axis == "y" ? obj.margin.top + 3 : 0 - 6;
+        model.attr("transform", "translate(".concat(mx, ", ").concat(my, ")")); // Reposition the +/- controls.
+
+        var controls = obj.d3node.select("g.domain-controls");
+        var cx = obj.axis == "y" ? 0 - 5 : obj.range[1] + 10;
+        var cy = obj.axis == "y" ? obj.margin.top - 10 : 0 + 5;
+        controls.attr("transform", "translate(".concat(cx, ", ").concat(cy, ")")); // Reposition hte actual plus/minus.
+
+        var dyPlus = obj.axis == "y" ? 0 : -5;
+        var dxPlus = obj.axis == "y" ? -5 : 0;
+        var dyMinus = obj.axis == "y" ? 0 : 5;
+        var dxMinus = obj.axis == "y" ? 5 : 1.5;
+        controls.select("text.plus").attr("dy", dyPlus);
+        controls.select("text.plus").attr("dx", dxPlus);
+        controls.select("text.minus").attr("dy", dyMinus);
+        controls.select("text.minus").attr("dx", dxMinus); // Position the variable label.
+
+        var labelgroup = obj.d3node.select("g.variable-controls");
+        var label = labelgroup.select("text.label"); // The text should be flush with the axis. To allow easier positioning use the `text-anchor' property.
+
+        label.attr("writing-mode", obj.axis == "y" ? "tb" : "lr");
+        label.text(obj.variable.name ? obj.variable.name : "Variable name");
+        var lx = obj.axis == "y" ? 30 : obj.range[1];
+        var ly = obj.axis == "y" ? -obj.margin.top : 30;
+        var la = obj.axis == "y" ? 180 : 0;
+        labelgroup.attr("transform", "rotate(".concat(la, ") translate(").concat(lx, ", ").concat(ly, ")"));
+      } // position
+
+    }, {
+      key: "draw",
+      value: function draw() {
+        var obj = this;
+        obj.d3node.selectAll("g.model-controls").select("text").attr("fill", obj.exponent > 0 ? "black" : "black").select("tspan.exp").html(obj.exponent); // A different scale is created for drawing to allow specific labels to be created (e.g. for scientific notation with the exponent above the axis.)	
+
+        var d3axisType = obj.axis == "y" ? axisLeft : axisBottom;
+        var d3axis = d3axisType(obj.scale);
+
+        if (obj.ticks) {
+          d3axis.tickValues(obj.ticks);
+        }
+        obj.d3node.select("g.graphic").call(d3axis); // Control the ticks. Mak
+
+        obj.d3node.select("g.graphic").selectAll("text").html(function (d) {
+          return obj.tickformat(d);
+        }); // Switch between the model controls.
+
+        var modelcontrols = obj.d3node.select("g.model-controls");
+        modelcontrols.selectAll("text").attr("display", "none");
+        modelcontrols.select("text." + obj.type).attr("display", "");
+      } // draw
+      // MOVE ALL THESE SWITCHES SOMEWHERE ELSE. MAYBE JUST CREATE A SUPPORTED OBJECT OUTSIDE SO ALL THE SMALL CHANGES CAN BE HANDLED THERE.
+
+    }, {
+      key: "tickformat",
+      value: function tickformat(d) {
+        // By default the tick values are assigned to all tick marks. Just control what appears in hte labels.
+        var obj = this;
+        var label;
+
+        switch (obj.type) {
+          case "log":
+            // Only orders of magnitude. Keep an eye out for number precision when dividing logarithms!
+            var res = Math.round(Math.log(d) / Math.log(obj.scale.base()) * 1e6) / 1e6; // Counting ticks doesn't work, because the ticks don't necessarily begin with the order of magnitude tick.
+
+            label = Number.isInteger(res) ? d : "";
+            break;
+
+          case "linear":
+            // All of them, but adjusted by the common exponent. 
+            label = d / Math.pow(10, obj.exponent);
+            break;
+        } // switch
+
+
+        return label;
+      } // tickformat
+
+    }, {
+      key: "getdrawvalue",
+      value: function getdrawvalue(t) {
+        // Given a task return its coordinate.
+        // This is just implemented for more strict control of wht this axis can do. It's not strictly needed because the scale underneath is not being changed.
+        // Needs the current object as it evaluates the incoming value using the current scale.
+        var obj = this;
+        var v = obj.variable.getvalue(t); // Return only the value of the current axis selection. Also, if the data doesn't have the appropriate attribute, then position hte point off screen instead of returning undefined. Will this break if viewPort is adjusted?
+
+        var dv = obj.scale(v);
+        return dv ? dv : -10;
+      } // getdrawvalue
+      // Getting values required to setup the scales.
+
+    }, {
+      key: "scale",
+      get: function get() {
+        // Computed value based on hte selected scale type.
+        var obj = this;
+        var scale;
+
+        switch (obj.type) {
+          case "log":
+            scale = log();
+            break;
+
+          case "linear":
+          default:
+            scale = linear();
+            break;
+        } // switch
+        // If the domain is below zero always Math.abs it to work with positive values.
+        // The domain of this one  goes below zero... It's because the domain was extended there!! Ah, will this break the zooming and panning below zero?? Probably no? Logs aren't defined for negtive values anyway? So what do I do in those cases? Do I just add a translation in the data? For now just
+        // Deal with the exponent. Will this require accessor functions?? This means that there should be another
+        // I will want the axis configuration to be stored and communicated further to pass into a python module. How will I do that? For that I'll need to evaluate teh data passed into the module. So I should use an evaluator anyway. Where should this evaluator be present? It should be present in the plot. The axis should return the parameters required for the evaluation. But it also needs to return the scale to be used for drawing. Actually, it just needs to present the draw value given some input. So just have that exposed? And a general evaluator that can handle any combination of inputs?
+
+
+        scale.range(obj.range).domain(obj.domain);
+        return scale;
+      } // get scale
+
+    }, {
+      key: "range",
+      get: function get() {
+        // When initialising a new range - e.g. on plot rescaling, the scales need to change
+        var obj = this; // When the axis is made the first tick is translated by the minimum of the range. Therefore the margin is only added when adjusting the `_range`. 
+
+        if (obj.axis == "y") {
+          // The browsers coordinate system runs from top of page to bottom. This is opposite from what we're used to in engineering charts. Reverse the range for hte desired change.
+          var r = [obj.plotbox.y[0] + obj.margin.top, obj.plotbox.y[1] - obj.margin.bottom];
+          return [r[1], r[0]];
+        } else {
+          return [obj.plotbox.x[0] + obj.margin.left, obj.plotbox.x[1] - obj.margin.right];
+        } // if
+
+      } // get range
+
+    }, {
+      key: "setplotbox",
+      value: function setplotbox(plotbox) {
+        // The vertical position of the axis doesn't actually depend on the range. The y-position for the x axis should be communicated from outside. The axis should always get the x and y dimesnion of the svg we're placing it on.
+        this.plotbox = plotbox;
+      } // plotbox
+      // Domain changes
+
+    }, {
+      key: "setdomain",
+      value: function setdomain(domain) {
+        this.domain = domain;
+      } // domain
+
+    }, {
+      key: "plusdomain",
+      value: function plusdomain() {
+        // Extend the domain by one difference between the existing ticks. It's always extended by hte distance between the last two ticks.
+        var obj = this;
+        var currentdomain = obj.domain;
+        var ticks = obj.scale.ticks(); // Calculate the tick difference. If that fails just set the difference to 10% of the domain range.
+
+        var tickdiff = ticks[ticks.length - 1] - ticks[ticks.length - 2];
+        tickdiff = tickdiff ? tickdiff : 0.1(currentdomain[1] - currentdomain[0]); // Set the new domain.
+
+        this.domain = [currentdomain[0], currentdomain[1] + tickdiff];
+      } // plusdomain
+
+    }, {
+      key: "minusdomain",
+      value: function minusdomain() {
+        // Reduce the domain by one difference between the existing ticks. It's always extended by hte distance between the last two ticks.
+        var obj = this;
+        var currentdomain = obj.domain;
+        var ticks = obj.scale.ticks(); // Calculate the tick difference. If that fails just set the difference to 10% of the domain range.
+
+        var tickdiff = ticks[ticks.length - 1] - ticks[ticks.length - 2];
+        tickdiff = tickdiff ? tickdiff : 0.1(currentdomain[1] - currentdomain[0]); // Set the new domain.
+
+        this.domain = [currentdomain[0], currentdomain[1] - tickdiff];
+      } // minusdomain
+      // Creating model variables.
+      // This exponent should be reworked to just return the transformation configuration.
+      // Difference between the tick labels, and the data for evaluation. For the evaluation whatever is displayed on hte axes should be passed to the model. But the exponent is just a cosmetic change.
+      // Can also use the exponent to guess what space we should be viewing the data in? Maybe not. For example erroneous values.
+      // Difference between a log scale transformation and a log scale axis. The log axis still shows the exact same values, whereas the transform will create new values. Do I want to differentiate between the two, or just apply a log transformation if the data is visualised with a log scale? Even if the data is in hte log scale the user may still want to use it as such?
+      // Still connect both - what you see is what you get. But on hte log plot maybe still keep the original labels?? Let's see how it goes.
+      // So if I have an exponent do I change the domain? But the exponent depends on the domain...Create a labelaxis just to draw the labels??
+
+    }, {
+      key: "exponent",
+      get: function get() {
+        var obj = this;
+
+        if (obj.domain.length > 0) {
+          var maxExp = calculateExponent(obj.domain[1]);
+          var minExp = calculateExponent(obj.domain[0]); // Which exponent to return? It has to be a multiple of three - guaranteed by calculateExponent.
+          // -10.000 - 10.000 -> 3
+          // 0 - 10.000 -> 3
+          // 0 - 1.000.000 -> 3 - to minimize string length?
+          // 
+          // If the order of magnitude is a factor of 3 then return the maximum one. e.g. range of 100 - 100.000 go for 3 to reduce teh string length
+
+          return maxExp - minExp >= 3 ? maxExp : minExp;
+        } else {
+          return 0;
+        } // if
+
+      } // exponent
+      // Changing the scale type. Click on the exponent to change the 
+
+    }, {
+      key: "nexttype",
+      value: function nexttype(type) {
+        // Sequence of axis types.
+        var obj = this;
+        var imax = obj.supportedtypes.length - 1;
+        var inext = obj.supportedtypes.indexOf(type) + 1;
+        var i = inext > imax ? inext - imax - 1 : inext;
+        return obj.supportedtypes[i];
+      } // nexttype
+      // Shouldn't really migrate the type of axes from the ordinalAxes to the variable. What if teh variable isn't observable for instance? In that case use an observable attribute of this class.
+
+    }, {
+      key: "incrementtype",
+      value: function incrementtype() {
+        var obj = this;
+        var newtype = obj.nexttype(obj.type); // If the switch is to `log' the domain needs to be changed to be positive. So: don't allow the change to log. If the user wants to use a log transformation on the data they need to first et it in the right range.
+
+        if (newtype == "log") {
+          var extent = obj.variable.extent;
+          var invalidExtent = extent[0] * extent[1] <= 0;
+
+          if (invalidExtent) {
+            // Move to next type.
+            newtype = obj.nexttype(newtype);
+          } // if
+
+        } // if
+        // Set the new type.
+
+
+        obj.type = newtype; // Try to increment it for the variable obj too.
+
+        if (typeof obj.variable.changetransformtype == "function") {
+          obj.variable.changetransformtype(newtype);
+        } // if
+        // Always switch back to the original domain.
+
+
+        if (obj.variable) {
+          obj.setdomain(obj.variable.extent);
+        } // if
+
+      } // incrementtype
+
+    }, {
+      key: "type",
+      get: // type
+      function get() {
+        // Maybe adjust this one so that it gets the type from the variable, if it's available.
+        var obj = this; // Default value.
+
+        var _type = obj._type; // But if the variable is defined, and it has a correctly defined type, then use that one instead. If it's observable this will also update automatically.
+
+        if (obj.variable) {
+          var customtype = obj.variable.transformtype;
+
+          if (obj.supportedtypes.includes(customtype)) {
+            _type = customtype;
+          } // if
+
+        }
+
+        return _type;
+      } // type
+      ,
+      set: function set(newtype) {
+        var obj = this; // The type can be set to a specific value.
+
+        if (obj.supportedtypes.includes(newtype)) {
+          obj._type = newtype;
+        } // if
+
+      }
+    }]);
+
+    return StaticOrdinalAxis;
+  }(); // StaticOrdinalAxis
+
+  /*
+  background: elements for background functionality (e.g. zoom rectangle)
+  data      : primary data representations
+  markup    : non-primary data graphic markups, (e.g. compressor map chics) 
+  x/y-axis  : x/y axis elements
+  exponent  : power exponent (big number labels may overlap otherwise)
+  */
+
+  var template$3 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"markup\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n";
+  /*
+  The histogram inset is a modification of teh two interactive axis inset. Firstly, the y-axis is made to be static. Secondly, the domain increase functionality needs to be ammended to change the number of bins instead of changing the actual domain.
+  */
+
+  var HistogramInset = /*#__PURE__*/function () {
+    function HistogramInset() {
+      _classCallCheck(this, HistogramInset);
+
+      this.width = 400;
+      this.height = 400;
+      var obj = this;
+      obj.node = html2element(template$3); // Make the axis objects, and connect them to the menu selection.
+      // `obj.plotbox' specifies the area of the SVG that the chart should be drawn to.
+      // Variables must be set later.
+
+      obj.y = new StaticOrdinalAxis("y", obj.plotbox);
+      obj.x = new ordinalAxis("x", obj.plotbox);
+      var axisContainer = obj.node.querySelector("g.axes");
+      axisContainer.appendChild(obj.y.node);
+      axisContainer.appendChild(obj.x.node);
+      var menuContainer = obj.node.querySelector("div.variable-select-menus");
+      menuContainer.appendChild(obj.x.menu.node);
+      obj.x.nbins = 10;
+
+      obj.x.plusdomain = function () {
+        obj.x.nbins += 1;
+      }; // plusdomain
+
+
+      obj.x.minusdomain = function () {
+        // Make sure the number of bins is above 0.
+        obj.x.nbins = Math.max(obj.x.nbins - 1, 1);
+      }; // plusdomain
+
+    } // constructor
+
+
+    _createClass(HistogramInset, [{
+      key: "update",
+      value: function update(variables) {
+        var obj = this;
+        obj.x.update(variables);
+        obj.y.update();
+      } // update
+
+    }, {
+      key: "plotbox",
+      get: function get() {
+        // Specify the area of the svg dedicated to the plot. In this case it'll be all of it. The margin determines the amount of whitespace around the plot. This whitespace will NOT include the axis labels etc.
+        var obj = this;
+        var margin = {
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0
+        }; // If the inset was not yet attached the getBoundingClientRect will return an empty rectangle. Instead, have this inset completely control the width and height of hte svg.
+        // let svgrect = obj.node.getBoundingClientRect();
+
+        var plot = {
+          x: [margin.left, obj.width - margin.left - margin.right],
+          y: [margin.top, obj.height - margin.top - margin.bottom]
+        };
+        return plot;
+      } // plotbox
+
+    }, {
+      key: "isConfigured",
+      get: function get() {
+        var obj = this; // At the beginning the plot starts empty.
+
+        return obj.x.variable.name != undefined;
+      } // isConfigured
+
+    }]);
+
+    return HistogramInset;
+  }(); // HistogramInset
+
+  var template$2 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"histogram\"></div>\n</div>\n";
+
+  var histogram = /*#__PURE__*/function (_plotframe) {
+    _inherits(histogram, _plotframe);
+
+    var _super = _createSuper(histogram);
+
+    function histogram(data) {
+      var _this;
+
+      _classCallCheck(this, histogram);
+
+      _this = _super.call(this);
+      _this.width = 400;
+
+      var obj = _assertThisInitialized(_this);
+
+      obj.data = data; // Object to calculate the histgoram.
+
+      obj.histogram = bin();
+      obj.bins = []; // Append the plot backbone.
+
+      var container = obj.node.querySelector("div.card-body");
+      container.appendChild(html2element(template$2)); // Add a histogram inset. When initialising already pass in the card size.
+
+      obj.svgobj = new HistogramInset();
+      container.querySelector("div.histogram").appendChild(obj.svgobj.node);
+
+      obj.svgobj.x.onupdate = function () {
+        obj.updatebins();
+        obj.draw();
+        obj.repaint();
+      }; // function
+
+
+      obj.svgobj.y.onupdate = function () {
+        obj.refresh();
+      }; // function
+      // Change the initial title
+
+
+      obj.node.querySelector("input.card-title").value = "Histogram";
+      return _this;
+    } // constructor
+
+
+    _createClass(histogram, [{
+      key: "update",
+      value: function update() {
+        var obj = this;
+        obj.svgobj.update();
+        obj.refresh();
+      } // update
+
+    }, {
+      key: "updatedata",
+      value: function updatedata() {
+        // Launch if the global data changes -> new variables are needed.
+        var obj = this;
+        var variables = obj.data.variablenames.map(function (name) {
+          return new variableobj({
+            name: name,
+            extent: extent(obj.data.tasks, function (t) {
+              return t.metadata[name];
+            })
+          }); // new variableobj
+        });
+        obj.svgobj.update(variables);
+        obj.draw();
+      } // updatedata  
+
+    }, {
+      key: "updatebins",
+      value: function updatebins() {
+        var obj = this;
+        var x = obj.svgobj.x;
+        var y = obj.svgobj.y;
+        var thresholds = Array(x.nbins + 1).fill().map(function (el, i) {
+          return x.domain[0] * (x.nbins - i) / x.nbins + x.domain[1] * i / x.nbins;
+        });
+        obj.histogram.value(function (d) {
+          return d.metadata[x.variable.name];
+        }).domain(x.domain).thresholds(thresholds); // d3.thresholdFreedmanDiaconis(values, min, max)
+        // All bins should be calculated here, as it onlz depends on the overall data. Subset bins are calculated here to allow ???
+
+        obj.allbins = obj.histogram(obj.data.tasks);
+        obj.bins = obj.histogram(obj.data.subset.value); // The y-axis depends on the bins, so it needs to be updated here.
+
+        y.setdomain([0, max(obj.allbins, function (b) {
+          return b.length;
+        })]);
+        y.ticks = Array(y.domain[1] + 1).fill().map(function (v, i) {
+          return i;
+        });
+        y.draw();
+      } // updatebins
+
+    }, {
+      key: "draw",
+      value: function draw() {
+        var obj = this;
+        obj.makeRects(obj.allbins, "outline", "gainsboro");
+        obj.updateRects("outline");
+        obj.makeRects(obj.bins, "active", "cornflowerblue");
+        obj.refresh();
+      } // draw
+
+    }, {
+      key: "makeRects",
+      value: function makeRects(data, name, color) {
+        var obj = this;
+        var x = obj.svgobj.x.scale;
+        var y = obj.svgobj.y.scale;
+        var rects = select(obj.node).select("g.data").selectAll("rect.".concat(name)).data(data);
+        rects.exit().remove();
+        rects.enter().append("rect").attr("class", name).attr("x", function (b) {
+          return x(b.x0);
+        }).attr("y", function (b) {
+          return y(0);
+        }).attr("width", function (b) {
+          return Math.max(x(b.x1) - x(b.x0) - 1, 0);
+        }).attr("height", function (b) {
+          return 0;
+        }).attr("fill", color);
+      } // makeRects
+
+    }, {
+      key: "updateRects",
+      value: function updateRects(name) {
+        var obj = this;
+
+        if (obj.svgobj.isConfigured) {
+          var x = obj.svgobj.x.scale;
+          var y = obj.svgobj.y.scale;
+          select(obj.node).select("g.data").selectAll("rect.".concat(name)).transition().attr("x", function (b) {
+            return x(b.x0);
+          }).attr("y", function (b) {
+            return y(b.length);
+          }).attr("width", function (b) {
+            return Math.max(x(b.x1) - x(b.x0) - 1, 0);
+          }).attr("height", function (b) {
+            return y(0) - y(b.length);
+          });
+        } // if
+
+      } // updateRects
+
+    }, {
+      key: "refresh",
+      value: function refresh() {
+        var obj = this;
+        obj.bins = obj.histogram(obj.data.subset.value);
+        select(obj.node).select("g.data").selectAll("rect.active").data(obj.bins);
+        obj.updateRects("active");
+      } // refresh
+
+    }, {
+      key: "repaint",
+      value: function repaint() {
+        // Repaint is called as part of the global update, as for the sctterplot it's sufficient to reapply colors when filtering. But for the histogram the underlying data must be recalculated.
+        var obj = this;
+        obj.refresh();
+      } // repaint
+
+    }]);
+
+    return histogram;
+  }(plotframe); // histogram
+
+  /* Extend the histogram to allow filtering using a rectange */
+
+  var filterhistgoram = /*#__PURE__*/function (_histogram) {
+    _inherits(filterhistgoram, _histogram);
+
+    var _super = _createSuper(filterhistgoram);
+
+    function filterhistgoram(data) {
+      var _this;
+
+      _classCallCheck(this, filterhistgoram);
+
+      _this = _super.call(this, data);
+
+      var obj = _assertThisInitialized(_this); // Add functionality to draw a rectangle.
+      // Now add the drawing of the box.
+
+
+      var svg = obj.svgobj.node.querySelector("svg");
+      var g = select(svg).select("g.markup"); // Add in a brush
+
+      obj.brush = new brush(svg, g, "horizontal");
+
+      obj.brush.clear = function () {
+        // Clear the filter
+        obj.data.filterremove(obj.svgobj.x.variable.name);
+      }; // clear
+
+
+      obj.brush.submit = function () {
+        // Apply the filter
+        obj.data.filterapply(obj.svgobj.x.variable.name, obj.calculateInterval());
+      }; // submit
+      // Needs to also trim the filters when navigating away from dimension.
+
+
+      obj.svgobj.x.onupdate = function () {
+        obj.updatebins();
+        obj.draw();
+        obj.repaint();
+        obj.data.filtertrim();
+      }; // function
+      // Subscribe the plot to any changes of the subset.
+
+
+      obj.data.subset.subscribe(function () {
+        obj.repaint();
+      }); // subscribe
+
+      return _this;
+    } // constructor
+
+
+    _createClass(filterhistgoram, [{
+      key: "repaint",
+      value: function repaint() {
+        _get(_getPrototypeOf(filterhistgoram.prototype), "repaint", this).call(this);
+
+        var obj = this;
+        var x = obj.svgobj.x.scale;
+        var xf = obj.data.filters[obj.svgobj.x.variable.name];
+
+        if (xf) {
+          obj.brush.update(x(xf.range[0]), undefined, x(xf.range[1]) - x(xf.range[0]), undefined);
+        } // if
+
+      } // repaint
+
+    }, {
+      key: "calculateInterval",
+      value: function calculateInterval() {
+        // Calculate the intervals having been given two diagonally opposing points. The returned intervals should be in data units.
+        var obj = this;
+        var x = [obj.brush.p0[0], obj.brush.p1[0]];
+        return x.map(function (v) {
+          return obj.svgobj.x.scale.invert(v);
+        }).sort();
+      } // calculateIntervals
+
+    }]);
+
+    return filterhistgoram;
+  }(histogram); // filterhistgoram
 
   var template$1 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"linecontourplot\"></div>\n</div>\n";
   var additional = "\n<input class=\"card-title\" spellcheck=\"false\"  style=\"".concat(css.plotTitle, " color:orange;\" value=\"\">\n");
@@ -8089,6 +9361,12 @@
         tasks: undefined
       };
 
+      _this.accessor = function () {
+        return {
+          points: [[0, 0]]
+        };
+      };
+
       var obj = _assertThisInitialized(_this);
 
       obj.data = data; // Append the plot backbone.
@@ -8181,32 +9459,25 @@
       value: function draw() {
         // This just creates the lines, and removes redundant ones. The updating is done in refresh.
         var obj = this;
+        var lines = select(obj.node).select("g.data").selectAll("path").data(obj.data.subset.value); // First exit.
 
-        if (obj.data.tasks) {
-          var lines = select(obj.node).select("g.data").selectAll("path").data(obj.data.tasks); // First exit.
+        lines.exit().remove(); // Finally add new lines.
 
-          lines.exit().remove(); // Finally add new lines.
-
-          lines.enter().append("path").attr("stroke-width", 2).attr("fill", "none").on("mouseenter", function (e, d) {
-            // Place a label next to the target.
-            // obj.data.current = d;
-            obj.data.setcurrent(d);
-            obj.refresh();
-            obj.data.globalupdate();
-          }).on("mouseout", function (e, d) {
-            // obj.data.current = undefined;
-            obj.data.setcurrent(undefined);
-            obj.refresh();
-            obj.data.globalupdate();
-          }).on("click", function (e, d) {
-            // obj.data.datum = obj.data.datum == d ? undefined : d;
-            obj.data.selecttask(d);
-            obj.refresh();
-            obj.data.globalupdate();
-          });
-          obj.refresh();
-        } // if
-
+        lines.enter().append("path").attr("stroke-width", 2).attr("fill", "none").on("mouseenter", function (e, d) {
+          // Place a label next to the target.
+          // obj.data.current = d;
+          obj.data.setcurrent(d);
+          obj.data.repaint();
+        }).on("mouseout", function (e, d) {
+          // obj.data.current = undefined;
+          obj.data.setcurrent(undefined);
+          obj.data.repaint();
+        }).on("click", function (e, d) {
+          // obj.data.datum = obj.data.datum == d ? undefined : d;
+          obj.data.selecttask(d);
+          obj.data.repaint();
+        });
+        obj.refresh();
       } // draw
 
     }, {
@@ -8265,73 +9536,96 @@
     }; // function
 
   }); // forEach
-  // Create plots:
+  // On window change the currentlz active folder should be activated again to extend it.
 
-  var container = details.folder;
-  var plots = []; // Instantiate the data.
+  window.onresize = function () {
+    coordinate.forEach(function (cfrm) {
+      return cfrm.update(cfrm.active);
+    });
+  }; // onresize
+  // How do I subscribe the regular plots to just the subset data? Do I just hardcode it so? Or do I subscribe them to it also?
+  // Instantiate the data.
+
 
   var data = new dataStorage();
+  console.log(data); // Data storage applies the filtering also, and precomputes a subset. Whenever the subset changes the plots should repaint, but also any header titles should adjust.
 
-  data.globalupdate = function update() {
-    plots.forEach(function (p) {
-      p.repaint();
-    }); // forEach
-  }; // update
+  data.subset.subscribe(function () {
+    filtering.label("(".concat(data.tasks.length, ")"));
+    details.label("(".concat(data.subset.value.length, ")"));
+  }); // subscribe
+  // PLOTS
 
+  function addPlot(p, folder) {
+    folder.appendChild(p.node);
+    p.update();
+    data.plots.push(p);
+  } // addPlot
+  // FILTERING PLOTS.
+  // Add a scatterplot as a filtering plot prototype.
+  // Why do the filtering plots need to be available to filtering?
+
+
+  var fsp = new filterscatterplot(data);
+  addPlot(fsp, filtering.folder);
+  var fh = new filterhistgoram(data);
+  addPlot(fh, filtering.folder); // FLOW DETAIL PLOTS:
 
   var sp = new scatterplot(data);
-  container.appendChild(sp.node);
-  sp.update();
-  plots.push(sp);
+  addPlot(sp, details.folder);
+  data.subset.subscribe(function () {
+    sp.draw();
+  });
   var lc = new linecontourplot(data);
-  container.appendChild(lc.node);
-  lc.update();
-  plots.push(lc);
+  addPlot(lc, details.folder);
+  data.subset.subscribe(function () {
+    lc.draw();
+  });
   var lp_mach = new linedistributionplot(data);
-  container.appendChild(lp_mach.node);
-  lp_mach.update();
-  plots.push(lp_mach);
+  addPlot(lp_mach, details.folder);
+  data.subset.subscribe(function () {
+    lp_mach.draw();
+  });
   var lp_camber = new linedistributionplot(data);
-  container.appendChild(lp_camber.node);
-  lp_camber.update();
-  plots.push(lp_camber);
+  addPlot(lp_camber, details.folder);
+  data.subset.subscribe(function () {
+    lp_camber.draw();
+  });
   var lp_theta = new linedistributionplot(data);
-  container.appendChild(lp_theta.node);
-  lp_theta.update();
-  plots.push(lp_theta);
-  console.log(data); // ADD DRAG AND DROP FOR DATA
+  addPlot(lp_theta, details.folder);
+  data.subset.subscribe(function () {
+    lp_theta.draw();
+  }); // ADD DRAG AND DROP FOR DATA
 
   var dataLoader = new dragDropHandler();
 
   dataLoader.ondragdropped = function (loadeddata) {
     // This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
-    data.add(loadeddata);
-    console.log("Current number of tasks = ".concat(data.tasks.length)); // Load the data in and assign the series.
+    data.add(loadeddata); // Filtering plot
+
+    fsp.updatedata();
+    fh.updatedata(); // Load the data in and assign the series.
 
     sp.updatedata();
     lc.updatedata(data.contours[0]);
     lp_mach.updatedata(data.distributions[0]);
     lp_camber.updatedata(data.distributions[1]);
     lp_theta.updatedata(data.distributions[2]);
-    data.globalupdate();
   }; // ondragdropped
   // DRAGGING AND DROPPING THE DATA IS A DEVELOPMENT FEATURE.
 
 
-  var dragDropArea = document.getElementsByTagName("body")[0];
-
-  dragDropArea.ondrop = function (ev) {
+  document.body.ondrop = function (ev) {
     dataLoader.ondrop(ev);
   };
 
-  dragDropArea.ondragover = function (ev) {
+  document.body.ondragover = function (ev) {
     dataLoader.ondragover(ev);
   }; // Turn the details on by default. At the end so that the content has some height.
 
 
-  details.update(true); // Dev test dataset.
-
-  dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
+  filtering.update(true); // Dev test dataset.
+  // dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
 
 }());
 //# sourceMappingURL=app.js.map

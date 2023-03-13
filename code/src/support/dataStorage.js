@@ -1,26 +1,35 @@
 import crossfilter from "crossfilter2";
-
+import { unique } from "./helpers.js";
+import ObservableVariable from "./ObservableVariable.js"
 
 export default class dataStorage{
-  _tasks = undefined
+  tasks = []
   
+  
+  // Filtering
+  filters = {};
+  subset = new ObservableVariable([]);
   
   // Highlighting
   currentlocked = false
-  current = undefined
-  datum = undefined
+  current = undefined;
+  datum = undefined;
   
+  
+  // Detail plot accessors.
   distributions = [
 	  {name: "mach", extent: [], accessor: function(d){ return d.distribution["mach"]} },
 	  {name: "camber", extent: [], accessor: function(d){ return d.distribution["camber"]} },
 	  {name: "theta", extent: [], accessor: function(d){ return d.distribution["theta"]} }
   ]
   
-  
   contours = [
        {name: "mach", extent: [], accessor: function(d){ return d.contour["mach"]} }
   ]
   
+  
+  // Plots need to be held by the data, because in the case a plot variable is changed the relevant filter needs to be removed.
+  plots = [];
   
   constructor(){
     let obj = this;
@@ -29,19 +38,103 @@ export default class dataStorage{
 	// Initiate a crossfilter object.
 	obj.crossfilter = crossfilter();
 	
+	// And initiate a general dimension. Does this one get trimmed immediately?
+	obj.taskdim = obj.crossfilter.dimension(d=>d.taskId);
+	
   } // constructor
   
+  // Function that allows plots to trigger general updates.
+  repaint(){
+	let obj = this;
+	obj.plots.forEach(p=>{
+	  p.repaint();
+	}) // forEach
+  } // repaint
   
-  // Access the data.
-  set tasks(d){
-	  let obj = this;
-	  obj._tasks = d;
-  }
   
-  get tasks(){
-	  let obj = this;
-	  return obj._tasks;
-  }
+  /* FILTERING
+     What should happen when the plot sets a dimension, but then the user navigates away. Should the selection persist, or should that filter be removed? I think removed. But this means that dataStorage must listen to variable changes. Maybe that's the simplest way - just monitor active dimensions all the time.
+  */
+  filtertrim(){
+	// Check which filtering dimensions are still valid.
+	let obj = this;
+	  
+	  
+	// Check which filters are still active. This should be only for plots that support filtering though...
+	let plotvariables = obj.plots.reduce(function(acc,p){
+		let xname = p.svgobj.x.variable.name;
+		let yname = p.svgobj.y.variable.name;
+		
+		return acc.concat([xname,yname].filter(n=>n))
+	},[]) // reduce
+	
+	
+	let admissiblefiltervariables = unique(plotvariables);
+	
+	
+	// Now go through the dimensions and delete anz dimensions that are no longer needed. These are dimensions that do not appear as plot variables.
+	for(const dimensionname in obj.filters){
+		if(!admissiblefiltervariables.includes(dimensionname)){
+			obj.filters[dimensionname].dim.filterAll();
+			delete obj.filters[dimensionname]
+		} // if
+	} // for
+	
+	obj.filterupdate();
+	  
+  } // filtertrim
+  
+  filterapply(variablename, interval){
+	let obj = this;
+	// In some cases this function can be called with an undefined variablename, but a defined interval.
+	
+	
+	// Loop through the filters and either create additional dimensions, or set the desired interval range to existing dimensions.
+	
+	if(variablename && !obj.filters[variablename]){
+		// The range is required so that plots can access the data required to update their brushes.
+		filterset = {
+			range: interval,
+			dim: obj.crossfilter.dimension(d=>d.metadata[variablename])
+		}
+		obj.filters[variablename] = filterset; 
+	} // if
+	
+	
+	// Now if the correct filterset is defined apply hte filter.
+	let filterset = obj.filters[variablename];
+	if(filterset){
+		filterset.range = interval;
+		filterset.dim.filter(function(d){
+			return (d >= interval[ 0 ]) 
+			    && (d <= interval[ 1 ])  
+		}) // filter
+		
+		obj.filterupdate();
+	} // if
+  } // filterapply
+  
+  
+  filterremove(variablename){
+	let obj = this;
+	let filterset = obj.filters[variablename];
+	if( filterset ){
+		filterset.range = [0,0];
+		filterset.dim.filterAll();
+		
+		obj.filterupdate();
+	} // if
+  } // filterremove
+  
+  
+  
+  filterupdate(){
+	// Pre-save a crossfilter query.
+	let obj = this;
+	obj.subset.value = obj.taskdim.top(Infinity);
+  } // filterupdate
+  
+  
   
   
   // DATA IMPORT
@@ -61,16 +154,29 @@ export default class dataStorage{
 	  // Instead of replacing the data, merge the previous and the old data.
 	  let obj = this;
 	  
-	  let existingtasks = obj.tasks ? obj.tasks : [];
+	  let existingtasks = obj.tasks;
 	  let newtasks = reformatTasks(tasks);
 	  
 	  
 	  obj.tasks = existingtasks.concat( newtasks );
 	  obj.crossfilter.add(newtasks); 
 	  
-	  
+	  obj.updatevariablenames();  
 	  obj.updateextent();
   } // add
+  
+  
+  updatevariablenames(){
+	// The variables objects cannot be created here! The variables objects NEED (!) to be created in the plots themselves, as the axis extents, and the variable extents by extension, need to be updated for each plot separately. But the available variablenames can be determined here.
+	let obj = this;
+	if(obj.tasks){
+		// `dr' and `name' are the only allowed strings. dr is the filepath to the original data on Demetrios' machine.
+		obj.variablenames = Object.keys( obj.tasks[0].metadata )
+		  .filter(name=>!["dr", "name"].includes(name))
+	} else {
+		obj.variablenames = []
+	} // if
+  } // updatevariablenames
   
   
   updateextent(){
@@ -123,7 +229,7 @@ export default class dataStorage{
 	} // if
 	
 
-  } // toggledatum
+  } // selecttask
  
   setcurrent(task){
 	let obj = this;
