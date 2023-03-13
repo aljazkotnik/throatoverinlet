@@ -20,4 +20,16 @@ export function calculateExponent(val){
 	// Convert the exponent to multiple of three
 	return Math.floor( exp / 3 )*3
 
-} // calculateExponent
+} // 
+
+
+// From regular helpers.
+export function unique(d){		
+	// https://stackoverflow.com/questions/1960473/get-all-unique-values-in-a-javascript-array-remove-duplicates
+	function onlyUnique(value, index, self) { 
+		return self.indexOf(value) === index;
+	} // unique
+	
+	return d.filter( onlyUnique )
+
+} // unique

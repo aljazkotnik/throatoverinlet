@@ -102,6 +102,36 @@
     };
   }
 
+  function _superPropBase(object, property) {
+    while (!Object.prototype.hasOwnProperty.call(object, property)) {
+      object = _getPrototypeOf(object);
+      if (object === null) break;
+    }
+
+    return object;
+  }
+
+  function _get(target, property, receiver) {
+    if (typeof Reflect !== "undefined" && Reflect.get) {
+      _get = Reflect.get;
+    } else {
+      _get = function _get(target, property, receiver) {
+        var base = _superPropBase(target, property);
+
+        if (!base) return;
+        var desc = Object.getOwnPropertyDescriptor(base, property);
+
+        if (desc.get) {
+          return desc.get.call(receiver);
+        }
+
+        return desc.value;
+      };
+    }
+
+    return _get(target, property, receiver || target);
+  }
+
   var dragDropHandler = /*#__PURE__*/function () {
     function dragDropHandler() {
       _classCallCheck(this, dragDropHandler);
@@ -177,12 +207,1989 @@
     return dragDropHandler;
   }(); // dragDropHandler
 
+  let array8 = arrayUntyped,
+      array16 = arrayUntyped,
+      array32 = arrayUntyped,
+      arrayLengthen = arrayLengthenUntyped,
+      arrayWiden = arrayWidenUntyped;
+  if (typeof Uint8Array !== "undefined") {
+    array8 = function(n) { return new Uint8Array(n); };
+    array16 = function(n) { return new Uint16Array(n); };
+    array32 = function(n) { return new Uint32Array(n); };
+
+    arrayLengthen = function(array, length) {
+      if (array.length >= length) return array;
+      var copy = new array.constructor(length);
+      copy.set(array);
+      return copy;
+    };
+
+    arrayWiden = function(array, width) {
+      var copy;
+      switch (width) {
+        case 16: copy = array16(array.length); break;
+        case 32: copy = array32(array.length); break;
+        default: throw new Error("invalid array width!");
+      }
+      copy.set(array);
+      return copy;
+    };
+  }
+
+  function arrayUntyped(n) {
+    var array = new Array(n), i = -1;
+    while (++i < n) array[i] = 0;
+    return array;
+  }
+
+  function arrayLengthenUntyped(array, length) {
+    var n = array.length;
+    while (n < length) array[n++] = 0;
+    return array;
+  }
+
+  function arrayWidenUntyped(array, width) {
+    if (width > 32) throw new Error("invalid array width!");
+    return array;
+  }
+
+  // An arbitrarily-wide array of bitmasks
+  function bitarray(n) {
+    this.length = n;
+    this.subarrays = 1;
+    this.width = 8;
+    this.masks = {
+      0: 0
+    };
+
+    this[0] = array8(n);
+  }
+
+  bitarray.prototype.lengthen = function(n) {
+    var i, len;
+    for (i = 0, len = this.subarrays; i < len; ++i) {
+      this[i] = arrayLengthen(this[i], n);
+    }
+    this.length = n;
+  };
+
+  // Reserve a new bit index in the array, returns {offset, one}
+  bitarray.prototype.add = function() {
+    var m, w, one, i, len;
+
+    for (i = 0, len = this.subarrays; i < len; ++i) {
+      m = this.masks[i];
+      w = this.width - (32 * i);
+      // isolate the rightmost zero bit and return it as an unsigned int of 32 bits, if NaN or -1, return a 0 
+      one = (~m & (m + 1)) >>> 0;
+
+      if (w >= 32 && !one) {
+        continue;
+      }
+
+      if (w < 32 && (one & (1 << w))) {
+        // widen this subarray
+        this[i] = arrayWiden(this[i], w <<= 1);
+        this.width = 32 * i + w;
+      }
+
+      this.masks[i] |= one;
+
+      return {
+        offset: i,
+        one: one
+      };
+    }
+
+    // add a new subarray
+    this[this.subarrays] = array8(this.length);
+    this.masks[this.subarrays] = 1;
+    this.width += 8;
+    return {
+      offset: this.subarrays++,
+      one: 1
+    };
+  };
+
+  // Copy record from index src to index dest
+  bitarray.prototype.copy = function(dest, src) {
+    var i, len;
+    for (i = 0, len = this.subarrays; i < len; ++i) {
+      this[i][dest] = this[i][src];
+    }
+  };
+
+  // Truncate the array to the given length
+  bitarray.prototype.truncate = function(n) {
+    var i, len;
+    for (i = 0, len = this.subarrays; i < len; ++i) {
+      for (var j = this.length - 1; j >= n; j--) {
+        this[i][j] = 0;
+      }
+    }
+    this.length = n;
+  };
+
+  // Checks that all bits for the given index are 0
+  bitarray.prototype.zero = function(n) {
+    var i, len;
+    for (i = 0, len = this.subarrays; i < len; ++i) {
+      if (this[i][n]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Checks that all bits for the given index are 0 except for possibly one
+  bitarray.prototype.zeroExcept = function(n, offset, zero) {
+    var i, len;
+    for (i = 0, len = this.subarrays; i < len; ++i) {
+      if (i === offset ? this[i][n] & zero : this[i][n]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Checks that all bits for the given index are 0 except for the specified mask.
+  // The mask should be an array of the same size as the filter subarrays width.
+  bitarray.prototype.zeroExceptMask = function(n, mask) {
+    var i, len;
+    for (i = 0, len = this.subarrays; i < len; ++i) {
+      if (this[i][n] & mask[i]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Checks that only the specified bit is set for the given index
+  bitarray.prototype.only = function(n, offset, one) {
+    var i, len;
+    for (i = 0, len = this.subarrays; i < len; ++i) {
+      if (this[i][n] != (i === offset ? one : 0)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Checks that only the specified bit is set for the given index except for possibly one other
+  bitarray.prototype.onlyExcept = function(n, offset, zero, onlyOffset, onlyOne) {
+    var mask;
+    var i, len;
+    for (i = 0, len = this.subarrays; i < len; ++i) {
+      mask = this[i][n];
+      if (i === offset)
+        mask = (mask & zero) >>> 0;
+      if (mask != (i === onlyOffset ? onlyOne : 0)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  var xfilterArray = {
+    array8: arrayUntyped,
+    array16: arrayUntyped,
+    array32: arrayUntyped,
+    arrayLengthen: arrayLengthenUntyped,
+    arrayWiden: arrayWidenUntyped,
+    bitarray: bitarray
+  };
+
+  const filterExact = (bisect, value) => {
+    return function(values) {
+      var n = values.length;
+      return [bisect.left(values, value, 0, n), bisect.right(values, value, 0, n)];
+    };
+  };
+
+  const filterRange = (bisect, range) => {
+    var min = range[0],
+        max = range[1];
+    return function(values) {
+      var n = values.length;
+      return [bisect.left(values, min, 0, n), bisect.left(values, max, 0, n)];
+    };
+  };
+
+  const filterAll = values => {
+    return [0, values.length];
+  };
+
+  var xfilterFilter = {
+    filterExact,
+    filterRange,
+    filterAll
+  };
+
+  var cr_identity = d => {
+    return d;
+  };
+
+  var cr_null = () =>  {
+    return null;
+  };
+
+  var cr_zero = () => {
+    return 0;
+  };
+
+  function heap_by(f) {
+
+    // Builds a binary heap within the specified array a[lo:hi]. The heap has the
+    // property such that the parent a[lo+i] is always less than or equal to its
+    // two children: a[lo+2*i+1] and a[lo+2*i+2].
+    function heap(a, lo, hi) {
+      var n = hi - lo,
+          i = (n >>> 1) + 1;
+      while (--i > 0) sift(a, i, n, lo);
+      return a;
+    }
+
+    // Sorts the specified array a[lo:hi] in descending order, assuming it is
+    // already a heap.
+    function sort(a, lo, hi) {
+      var n = hi - lo,
+          t;
+      while (--n > 0) t = a[lo], a[lo] = a[lo + n], a[lo + n] = t, sift(a, 1, n, lo);
+      return a;
+    }
+
+    // Sifts the element a[lo+i-1] down the heap, where the heap is the contiguous
+    // slice of array a[lo:lo+n]. This method can also be used to update the heap
+    // incrementally, without incurring the full cost of reconstructing the heap.
+    function sift(a, i, n, lo) {
+      var d = a[--lo + i],
+          x = f(d),
+          child;
+      while ((child = i << 1) <= n) {
+        if (child < n && f(a[lo + child]) > f(a[lo + child + 1])) child++;
+        if (x <= f(a[lo + child])) break;
+        a[lo + i] = a[lo + child];
+        i = child;
+      }
+      a[lo + i] = d;
+    }
+
+    heap.sort = sort;
+    return heap;
+  }
+
+  const h$1 = heap_by(cr_identity);
+  h$1.by = heap_by;
+
+  function heapselect_by(f) {
+    var heap = h$1.by(f);
+
+    // Returns a new array containing the top k elements in the array a[lo:hi].
+    // The returned array is not sorted, but maintains the heap property. If k is
+    // greater than hi - lo, then fewer than k elements will be returned. The
+    // order of elements in a is unchanged by this operation.
+    function heapselect(a, lo, hi, k) {
+      var queue = new Array(k = Math.min(hi - lo, k)),
+          min,
+          i,
+          d;
+
+      for (i = 0; i < k; ++i) queue[i] = a[lo++];
+      heap(queue, 0, k);
+
+      if (lo < hi) {
+        min = f(queue[0]);
+        do {
+          if (f(d = a[lo]) > min) {
+            queue[0] = d;
+            min = f(heap(queue, 0, k)[0]);
+          }
+        } while (++lo < hi);
+      }
+
+      return queue;
+    }
+
+    return heapselect;
+  }
+
+
+  const h = heapselect_by(cr_identity);
+  h.by = heapselect_by; // assign the raw function to the export as well
+
+  function bisect_by(f) {
+
+    // Locate the insertion point for x in a to maintain sorted order. The
+    // arguments lo and hi may be used to specify a subset of the array which
+    // should be considered; by default the entire array is used. If x is already
+    // present in a, the insertion point will be before (to the left of) any
+    // existing entries. The return value is suitable for use as the first
+    // argument to `array.splice` assuming that a is already sorted.
+    //
+    // The returned insertion point i partitions the array a into two halves so
+    // that all v < x for v in a[lo:i] for the left side and all v >= x for v in
+    // a[i:hi] for the right side.
+    function bisectLeft(a, x, lo, hi) {
+      while (lo < hi) {
+        var mid = lo + hi >>> 1;
+        if (f(a[mid]) < x) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo;
+    }
+
+    // Similar to bisectLeft, but returns an insertion point which comes after (to
+    // the right of) any existing entries of x in a.
+    //
+    // The returned insertion point i partitions the array into two halves so that
+    // all v <= x for v in a[lo:i] for the left side and all v > x for v in
+    // a[i:hi] for the right side.
+    function bisectRight(a, x, lo, hi) {
+      while (lo < hi) {
+        var mid = lo + hi >>> 1;
+        if (x < f(a[mid])) hi = mid;
+        else lo = mid + 1;
+      }
+      return lo;
+    }
+
+    bisectRight.right = bisectRight;
+    bisectRight.left = bisectLeft;
+    return bisectRight;
+  }
+
+  const bisect = bisect_by(cr_identity);
+  bisect.by = bisect_by; // assign the raw function to the export as well
+
+  var permute = (array, index, deep) => {
+    for (var i = 0, n = index.length, copy = deep ? JSON.parse(JSON.stringify(array)) : new Array(n); i < n; ++i) {
+      copy[i] = array[index[i]];
+    }
+    return copy;
+  };
+
+  const reduceIncrement = p => {
+    return p + 1;
+  };
+
+  const reduceDecrement = p => {
+    return p - 1;
+  };
+
+  const reduceAdd = f => {
+    return function(p, v) {
+      return p + +f(v);
+    };
+  };
+
+  const reduceSubtract = f => {
+    return function(p, v) {
+      return p - f(v);
+    };
+  };
+
+  var xfilterReduce = {
+    reduceIncrement,
+    reduceDecrement,
+    reduceAdd,
+    reduceSubtract
+  };
+
+  function deep(t,e,i,n,r){for(r in n=(i=i.split(".")).splice(-1,1),i)e=e[i[r]]=e[i[r]]||{};return t(e,n)}
+
+  // Note(cg): result was previsouly using lodash.result, not ESM compatible.
+   
+  const get$2 = (obj, prop) => {
+    const value = obj[prop];
+    return (typeof value === 'function') ? value.call(obj) : value;
+  };
+
+  /**
+   * get value of object at a deep path.
+   * if the resolved value is a function,
+   * it's invoked with the `this` binding of 
+   * its parent object and its result is returned. 
+   *  
+   * @param  {Object} obj  the object (e.g. { 'a': [{ 'b': { 'c1': 3, 'c2': 4} }], 'd': {e:1} }; )
+   * @param  {String} path deep path (e.g. `d.e`` or `a[0].b.c1`. Dot notation (a.0.b)is also supported)
+   * @return {Any}      the resolved value
+   */
+  const reg = /\[([\w\d]+)\]/g;
+  var result = (obj, path) => {
+    return deep(get$2, obj, path.replace(reg, '.$1'))
+  };
+
+  // constants
+  var REMOVED_INDEX = -1;
+
+  crossfilter.heap = h$1;
+  crossfilter.heapselect = h;
+  crossfilter.bisect = bisect;
+  crossfilter.permute = permute;
+
+  function crossfilter() {
+    var crossfilter = {
+      add: add,
+      remove: removeData,
+      dimension: dimension,
+      groupAll: groupAll,
+      size: size,
+      all: all,
+      allFiltered: allFiltered,
+      onChange: onChange,
+      isElementFiltered: isElementFiltered
+    };
+
+    var data = [], // the records
+        n = 0, // the number of records; data.length
+        filters, // 1 is filtered out
+        filterListeners = [], // when the filters change
+        dataListeners = [], // when data is added
+        removeDataListeners = [], // when data is removed
+        callbacks = [];
+
+    filters = new xfilterArray.bitarray(0);
+
+    // Adds the specified new records to this crossfilter.
+    function add(newData) {
+      var n0 = n,
+          n1 = newData.length;
+
+      // If there's actually new data to add…
+      // Merge the new data into the existing data.
+      // Lengthen the filter bitset to handle the new records.
+      // Notify listeners (dimensions and groups) that new data is available.
+      if (n1) {
+        data = data.concat(newData);
+        filters.lengthen(n += n1);
+        dataListeners.forEach(function(l) { l(newData, n0, n1); });
+        triggerOnChange('dataAdded');
+      }
+
+      return crossfilter;
+    }
+
+    // Removes all records that match the current filters, or if a predicate function is passed,
+    // removes all records matching the predicate (ignoring filters).
+    function removeData(predicate) {
+      var // Mapping from old record indexes to new indexes (after records removed)
+          newIndex = new Array(n),
+          removed = [],
+          usePred = typeof predicate === 'function',
+          shouldRemove = function (i) {
+            return usePred ? predicate(data[i], i) : filters.zero(i)
+          };
+
+      for (var index1 = 0, index2 = 0; index1 < n; ++index1) {
+        if ( shouldRemove(index1) ) {
+          removed.push(index1);
+          newIndex[index1] = REMOVED_INDEX;
+        } else {
+          newIndex[index1] = index2++;
+        }
+      }
+
+      // Remove all matching records from groups.
+      filterListeners.forEach(function(l) { l(-1, -1, [], removed, true); });
+
+      // Update indexes.
+      removeDataListeners.forEach(function(l) { l(newIndex); });
+
+      // Remove old filters and data by overwriting.
+      for (var index3 = 0, index4 = 0; index3 < n; ++index3) {
+        if ( newIndex[index3] !== REMOVED_INDEX ) {
+          if (index3 !== index4) filters.copy(index4, index3), data[index4] = data[index3];
+          ++index4;
+        }
+      }
+
+      data.length = n = index4;
+      filters.truncate(index4);
+      triggerOnChange('dataRemoved');
+    }
+
+    function maskForDimensions(dimensions) {
+      var n,
+          d,
+          len,
+          id,
+          mask = Array(filters.subarrays);
+      for (n = 0; n < filters.subarrays; n++) { mask[n] = ~0; }
+      for (d = 0, len = dimensions.length; d < len; d++) {
+        // The top bits of the ID are the subarray offset and the lower bits are the bit
+        // offset of the "one" mask.
+        id = dimensions[d].id();
+        mask[id >> 7] &= ~(0x1 << (id & 0x3f));
+      }
+      return mask;
+    }
+
+    // Return true if the data element at index i is filtered IN.
+    // Optionally, ignore the filters of any dimensions in the ignore_dimensions list.
+    function isElementFiltered(i, ignore_dimensions) {
+      var mask = maskForDimensions(ignore_dimensions || []);
+      return filters.zeroExceptMask(i,mask);
+    }
+
+    // Adds a new dimension with the specified value accessor function.
+    function dimension(value, iterable) {
+
+      if (typeof value === 'string') {
+        var accessorPath = value;
+        value = function(d) { return result(d, accessorPath); };
+      }
+
+      var dimension = {
+        filter: filter,
+        filterExact: filterExact,
+        filterRange: filterRange,
+        filterFunction: filterFunction,
+        filterAll: filterAll,
+        currentFilter: currentFilter,
+        hasCurrentFilter: hasCurrentFilter,
+        top: top,
+        bottom: bottom,
+        group: group,
+        groupAll: groupAll,
+        dispose: dispose,
+        remove: dispose, // for backwards-compatibility
+        accessor: value,
+        id: function() { return id; }
+      };
+
+      var one, // lowest unset bit as mask, e.g., 00001000
+          zero, // inverted one, e.g., 11110111
+          offset, // offset into the filters arrays
+          id, // unique ID for this dimension (reused when dimensions are disposed)
+          values, // sorted, cached array
+          index, // maps sorted value index -> record index (in data)
+          newValues, // temporary array storing newly-added values
+          newIndex, // temporary array storing newly-added index
+          iterablesIndexCount,
+          iterablesIndexFilterStatus,
+          iterablesEmptyRows = [],
+          sortRange = function(n) {
+            return cr_range(n).sort(function(A, B) {
+              var a = newValues[A], b = newValues[B];
+              return a < b ? -1 : a > b ? 1 : A - B;
+            });
+          },
+          refilter = xfilterFilter.filterAll, // for recomputing filter
+          refilterFunction, // the custom filter function in use
+          filterValue, // the value used for filtering (value, array, function or undefined)
+          filterValuePresent, // true if filterValue contains something
+          indexListeners = [], // when data is added
+          dimensionGroups = [],
+          lo0 = 0,
+          hi0 = 0,
+          t = 0,
+          k;
+
+      // Updating a dimension is a two-stage process. First, we must update the
+      // associated filters for the newly-added records. Once all dimensions have
+      // updated their filters, the groups are notified to update.
+      dataListeners.unshift(preAdd);
+      dataListeners.push(postAdd);
+
+      removeDataListeners.push(removeData);
+
+      // Add a new dimension in the filter bitmap and store the offset and bitmask.
+      var tmp = filters.add();
+      offset = tmp.offset;
+      one = tmp.one;
+      zero = ~one;
+
+      // Create a unique ID for the dimension
+      // IDs will be re-used if dimensions are disposed.
+      // For internal use the ID is the subarray offset shifted left 7 bits or'd with the
+      // bit offset of the set bit in the dimension's "one" mask.
+      id = (offset << 7) | (Math.log(one) / Math.log(2));
+
+      preAdd(data, 0, n);
+      postAdd(data, 0, n);
+
+      // Incorporates the specified new records into this dimension.
+      // This function is responsible for updating filters, values, and index.
+      function preAdd(newData, n0, n1) {
+        var newIterablesIndexCount,
+            newIterablesIndexFilterStatus;
+
+        if (iterable){
+          // Count all the values
+          t = 0;
+          j = 0;
+          k = [];
+
+          for (var i0 = 0; i0 < newData.length; i0++) {
+            for(j = 0, k = value(newData[i0]); j < k.length; j++) {
+              t++;
+            }
+          }
+
+          newValues = [];
+          newIterablesIndexCount = cr_range(newData.length);
+          newIterablesIndexFilterStatus = cr_index(t,1);
+          var unsortedIndex = cr_range(t);
+
+          for (var l = 0, index1 = 0; index1 < newData.length; index1++) {
+            k = value(newData[index1]);
+            //
+            if(!k.length){
+              newIterablesIndexCount[index1] = 0;
+              iterablesEmptyRows.push(index1 + n0);
+              continue;
+            }
+            newIterablesIndexCount[index1] = k.length;
+            for (j = 0; j < k.length; j++) {
+              newValues.push(k[j]);
+              unsortedIndex[l] = index1;
+              l++;
+            }
+          }
+
+          // Create the Sort map used to sort both the values and the valueToData indices
+          var sortMap = sortRange(t);
+
+          // Use the sortMap to sort the newValues
+          newValues = permute(newValues, sortMap);
+
+
+          // Use the sortMap to sort the unsortedIndex map
+          // newIndex should be a map of sortedValue -> crossfilterData
+          newIndex = permute(unsortedIndex, sortMap);
+
+        } else {
+          // Permute new values into natural order using a standard sorted index.
+          newValues = newData.map(value);
+          newIndex = sortRange(n1);
+          newValues = permute(newValues, newIndex);
+        }
+
+        // Bisect newValues to determine which new records are selected.
+        var bounds = refilter(newValues), lo1 = bounds[0], hi1 = bounds[1];
+
+        var index2, index3, index4;
+        if(iterable) {
+          n1 = t;
+          if (refilterFunction) {
+            for (index2 = 0; index2 < n1; ++index2) {
+              if (!refilterFunction(newValues[index2], index2)) {
+                if(--newIterablesIndexCount[newIndex[index2]] === 0) {
+                  filters[offset][newIndex[index2] + n0] |= one;
+                }
+                newIterablesIndexFilterStatus[index2] = 1;
+              }
+            }
+          } else {
+            for (index3 = 0; index3 < lo1; ++index3) {
+              if(--newIterablesIndexCount[newIndex[index3]] === 0) {
+                filters[offset][newIndex[index3] + n0] |= one;
+              }
+              newIterablesIndexFilterStatus[index3] = 1;
+            }
+            for (index4 = hi1; index4 < n1; ++index4) {
+              if(--newIterablesIndexCount[newIndex[index4]] === 0) {
+                filters[offset][newIndex[index4] + n0] |= one;
+              }
+              newIterablesIndexFilterStatus[index4] = 1;
+            }
+          }
+        } else {
+          if (refilterFunction) {
+            for (index2 = 0; index2 < n1; ++index2) {
+              if (!refilterFunction(newValues[index2], index2)) {
+                filters[offset][newIndex[index2] + n0] |= one;
+              }
+            }
+          } else {
+            for (index3 = 0; index3 < lo1; ++index3) {
+              filters[offset][newIndex[index3] + n0] |= one;
+            }
+            for (index4 = hi1; index4 < n1; ++index4) {
+              filters[offset][newIndex[index4] + n0] |= one;
+            }
+          }
+        }
+
+        // If this dimension previously had no data, then we don't need to do the
+        // more expensive merge operation; use the new values and index as-is.
+        if (!n0) {
+          values = newValues;
+          index = newIndex;
+          iterablesIndexCount = newIterablesIndexCount;
+          iterablesIndexFilterStatus = newIterablesIndexFilterStatus;
+          lo0 = lo1;
+          hi0 = hi1;
+          return;
+        }
+
+
+
+        var oldValues = values,
+          oldIndex = index,
+          oldIterablesIndexFilterStatus = iterablesIndexFilterStatus,
+          old_n0,
+          i1 = 0;
+
+        i0 = 0;
+
+        if(iterable){
+          old_n0 = n0;
+          n0 = oldValues.length;
+          n1 = t;
+        }
+
+        // Otherwise, create new arrays into which to merge new and old.
+        values = iterable ? new Array(n0 + n1) : new Array(n);
+        index = iterable ? new Array(n0 + n1) : cr_index(n, n);
+        if(iterable) iterablesIndexFilterStatus = cr_index(n0 + n1, 1);
+
+        // Concatenate the newIterablesIndexCount onto the old one.
+        if(iterable) {
+          var oldiiclength = iterablesIndexCount.length;
+          iterablesIndexCount = xfilterArray.arrayLengthen(iterablesIndexCount, n);
+          for(var j=0; j+oldiiclength < n; j++) {
+            iterablesIndexCount[j+oldiiclength] = newIterablesIndexCount[j];
+          }
+        }
+
+        // Merge the old and new sorted values, and old and new index.
+        var index5 = 0;
+        for (; i0 < n0 && i1 < n1; ++index5) {
+          if (oldValues[i0] < newValues[i1]) {
+            values[index5] = oldValues[i0];
+            if(iterable) iterablesIndexFilterStatus[index5] = oldIterablesIndexFilterStatus[i0];
+            index[index5] = oldIndex[i0++];
+          } else {
+            values[index5] = newValues[i1];
+            if(iterable) iterablesIndexFilterStatus[index5] = newIterablesIndexFilterStatus[i1];
+            index[index5] = newIndex[i1++] + (iterable ? old_n0 : n0);
+          }
+        }
+
+        // Add any remaining old values.
+        for (; i0 < n0; ++i0, ++index5) {
+          values[index5] = oldValues[i0];
+          if(iterable) iterablesIndexFilterStatus[index5] = oldIterablesIndexFilterStatus[i0];
+          index[index5] = oldIndex[i0];
+        }
+
+        // Add any remaining new values.
+        for (; i1 < n1; ++i1, ++index5) {
+          values[index5] = newValues[i1];
+          if(iterable) iterablesIndexFilterStatus[index5] = newIterablesIndexFilterStatus[i1];
+          index[index5] = newIndex[i1] + (iterable ? old_n0 : n0);
+        }
+
+        // Bisect again to recompute lo0 and hi0.
+        bounds = refilter(values), lo0 = bounds[0], hi0 = bounds[1];
+      }
+
+      // When all filters have updated, notify index listeners of the new values.
+      function postAdd(newData, n0, n1) {
+        indexListeners.forEach(function(l) { l(newValues, newIndex, n0, n1); });
+        newValues = newIndex = null;
+      }
+
+      function removeData(reIndex) {
+        if (iterable) {
+          for (var i0 = 0, i1 = 0; i0 < iterablesEmptyRows.length; i0++) {
+            if (reIndex[iterablesEmptyRows[i0]] !== REMOVED_INDEX) {
+              iterablesEmptyRows[i1] = reIndex[iterablesEmptyRows[i0]];
+              i1++;
+            }
+          }
+          iterablesEmptyRows.length = i1;
+          for (i0 = 0, i1 = 0; i0 < n; i0++) {
+            if (reIndex[i0] !== REMOVED_INDEX) {
+              if (i1 !== i0) iterablesIndexCount[i1] = iterablesIndexCount[i0];
+              i1++;
+            }
+          }
+          iterablesIndexCount = iterablesIndexCount.slice(0, i1);
+        }
+        // Rewrite our index, overwriting removed values
+        var n0 = values.length;
+        for (var i = 0, j = 0, oldDataIndex; i < n0; ++i) {
+          oldDataIndex = index[i];
+          if (reIndex[oldDataIndex] !== REMOVED_INDEX) {
+            if (i !== j) values[j] = values[i];
+            index[j] = reIndex[oldDataIndex];
+            if (iterable) {
+              iterablesIndexFilterStatus[j] = iterablesIndexFilterStatus[i];
+            }
+            ++j;
+          }
+        }
+        values.length = j;
+        if (iterable) iterablesIndexFilterStatus = iterablesIndexFilterStatus.slice(0, j);
+        while (j < n0) index[j++] = 0;
+
+        // Bisect again to recompute lo0 and hi0.
+        var bounds = refilter(values);
+        lo0 = bounds[0], hi0 = bounds[1];
+      }
+
+      // Updates the selected values based on the specified bounds [lo, hi].
+      // This implementation is used by all the public filter methods.
+      function filterIndexBounds(bounds) {
+
+        var lo1 = bounds[0],
+            hi1 = bounds[1];
+
+        if (refilterFunction) {
+          refilterFunction = null;
+          filterIndexFunction(function(d, i) { return lo1 <= i && i < hi1; }, bounds[0] === 0 && bounds[1] === values.length);
+          lo0 = lo1;
+          hi0 = hi1;
+          return dimension;
+        }
+
+        var i,
+            j,
+            k,
+            added = [],
+            removed = [],
+            valueIndexAdded = [],
+            valueIndexRemoved = [];
+
+
+        // Fast incremental update based on previous lo index.
+        if (lo1 < lo0) {
+          for (i = lo1, j = Math.min(lo0, hi1); i < j; ++i) {
+            added.push(index[i]);
+            valueIndexAdded.push(i);
+          }
+        } else if (lo1 > lo0) {
+          for (i = lo0, j = Math.min(lo1, hi0); i < j; ++i) {
+            removed.push(index[i]);
+            valueIndexRemoved.push(i);
+          }
+        }
+
+        // Fast incremental update based on previous hi index.
+        if (hi1 > hi0) {
+          for (i = Math.max(lo1, hi0), j = hi1; i < j; ++i) {
+            added.push(index[i]);
+            valueIndexAdded.push(i);
+          }
+        } else if (hi1 < hi0) {
+          for (i = Math.max(lo0, hi1), j = hi0; i < j; ++i) {
+            removed.push(index[i]);
+            valueIndexRemoved.push(i);
+          }
+        }
+
+        if(!iterable) {
+          // Flip filters normally.
+
+          for(i=0; i<added.length; i++) {
+            filters[offset][added[i]] ^= one;
+          }
+
+          for(i=0; i<removed.length; i++) {
+            filters[offset][removed[i]] ^= one;
+          }
+
+        } else {
+          // For iterables, we need to figure out if the row has been completely removed vs partially included
+          // Only count a row as added if it is not already being aggregated. Only count a row
+          // as removed if the last element being aggregated is removed.
+
+          var newAdded = [];
+          var newRemoved = [];
+          for (i = 0; i < added.length; i++) {
+            iterablesIndexCount[added[i]]++;
+            iterablesIndexFilterStatus[valueIndexAdded[i]] = 0;
+            if(iterablesIndexCount[added[i]] === 1) {
+              filters[offset][added[i]] ^= one;
+              newAdded.push(added[i]);
+            }
+          }
+          for (i = 0; i < removed.length; i++) {
+            iterablesIndexCount[removed[i]]--;
+            iterablesIndexFilterStatus[valueIndexRemoved[i]] = 1;
+            if(iterablesIndexCount[removed[i]] === 0) {
+              filters[offset][removed[i]] ^= one;
+              newRemoved.push(removed[i]);
+            }
+          }
+
+          added = newAdded;
+          removed = newRemoved;
+
+          // Now handle empty rows.
+          if(refilter === xfilterFilter.filterAll) {
+            for(i = 0; i < iterablesEmptyRows.length; i++) {
+              if((filters[offset][k = iterablesEmptyRows[i]] & one)) {
+                // Was not in the filter, so set the filter and add
+                filters[offset][k] ^= one;
+                added.push(k);
+              }
+            }
+          } else {
+            // filter in place - remove empty rows if necessary
+            for(i = 0; i < iterablesEmptyRows.length; i++) {
+              if(!(filters[offset][k = iterablesEmptyRows[i]] & one)) {
+                // Was in the filter, so set the filter and remove
+                filters[offset][k] ^= one;
+                removed.push(k);
+              }
+            }
+          }
+        }
+
+        lo0 = lo1;
+        hi0 = hi1;
+        filterListeners.forEach(function(l) { l(one, offset, added, removed); });
+        triggerOnChange('filtered');
+        return dimension;
+      }
+
+      // Filters this dimension using the specified range, value, or null.
+      // If the range is null, this is equivalent to filterAll.
+      // If the range is an array, this is equivalent to filterRange.
+      // Otherwise, this is equivalent to filterExact.
+      function filter(range) {
+        return range == null
+            ? filterAll() : Array.isArray(range)
+            ? filterRange(range) : typeof range === "function"
+            ? filterFunction(range)
+            : filterExact(range);
+      }
+
+      // Filters this dimension to select the exact value.
+      function filterExact(value) {
+        filterValue = value;
+        filterValuePresent = true;
+        return filterIndexBounds((refilter = xfilterFilter.filterExact(bisect, value))(values));
+      }
+
+      // Filters this dimension to select the specified range [lo, hi].
+      // The lower bound is inclusive, and the upper bound is exclusive.
+      function filterRange(range) {
+        filterValue = range;
+        filterValuePresent = true;
+        return filterIndexBounds((refilter = xfilterFilter.filterRange(bisect, range))(values));
+      }
+
+      // Clears any filters on this dimension.
+      function filterAll() {
+        filterValue = undefined;
+        filterValuePresent = false;
+        return filterIndexBounds((refilter = xfilterFilter.filterAll)(values));
+      }
+
+      // Filters this dimension using an arbitrary function.
+      function filterFunction(f) {
+        filterValue = f;
+        filterValuePresent = true;
+
+        refilterFunction = f;
+        refilter = xfilterFilter.filterAll;
+
+        filterIndexFunction(f, false);
+
+        var bounds = refilter(values);
+        lo0 = bounds[0], hi0 = bounds[1];
+
+        return dimension;
+      }
+
+      function filterIndexFunction(f, filterAll) {
+        var i,
+            k,
+            x,
+            added = [],
+            removed = [],
+            valueIndexAdded = [],
+            valueIndexRemoved = [],
+            indexLength = values.length;
+
+        if(!iterable) {
+          for (i = 0; i < indexLength; ++i) {
+            if (!(filters[offset][k = index[i]] & one) ^ !!(x = f(values[i], i))) {
+              if (x) added.push(k);
+              else removed.push(k);
+            }
+          }
+        }
+
+        if(iterable) {
+          for(i=0; i < indexLength; ++i) {
+            if(f(values[i], i)) {
+              added.push(index[i]);
+              valueIndexAdded.push(i);
+            } else {
+              removed.push(index[i]);
+              valueIndexRemoved.push(i);
+            }
+          }
+        }
+
+        if(!iterable) {
+          for(i=0; i<added.length; i++) {
+            if(filters[offset][added[i]] & one) filters[offset][added[i]] &= zero;
+          }
+
+          for(i=0; i<removed.length; i++) {
+            if(!(filters[offset][removed[i]] & one)) filters[offset][removed[i]] |= one;
+          }
+        } else {
+
+          var newAdded = [];
+          var newRemoved = [];
+          for (i = 0; i < added.length; i++) {
+            // First check this particular value needs to be added
+            if(iterablesIndexFilterStatus[valueIndexAdded[i]] === 1) {
+              iterablesIndexCount[added[i]]++;
+              iterablesIndexFilterStatus[valueIndexAdded[i]] = 0;
+              if(iterablesIndexCount[added[i]] === 1) {
+                filters[offset][added[i]] ^= one;
+                newAdded.push(added[i]);
+              }
+            }
+          }
+          for (i = 0; i < removed.length; i++) {
+            // First check this particular value needs to be removed
+            if(iterablesIndexFilterStatus[valueIndexRemoved[i]] === 0) {
+              iterablesIndexCount[removed[i]]--;
+              iterablesIndexFilterStatus[valueIndexRemoved[i]] = 1;
+              if(iterablesIndexCount[removed[i]] === 0) {
+                filters[offset][removed[i]] ^= one;
+                newRemoved.push(removed[i]);
+              }
+            }
+          }
+
+          added = newAdded;
+          removed = newRemoved;
+
+          // Now handle empty rows.
+          if(filterAll) {
+            for(i = 0; i < iterablesEmptyRows.length; i++) {
+              if((filters[offset][k = iterablesEmptyRows[i]] & one)) {
+                // Was not in the filter, so set the filter and add
+                filters[offset][k] ^= one;
+                added.push(k);
+              }
+            }
+          } else {
+            // filter in place - remove empty rows if necessary
+            for(i = 0; i < iterablesEmptyRows.length; i++) {
+              if(!(filters[offset][k = iterablesEmptyRows[i]] & one)) {
+                // Was in the filter, so set the filter and remove
+                filters[offset][k] ^= one;
+                removed.push(k);
+              }
+            }
+          }
+        }
+
+        filterListeners.forEach(function(l) { l(one, offset, added, removed); });
+        triggerOnChange('filtered');
+      }
+
+      function currentFilter() {
+        return filterValue;
+      }
+
+      function hasCurrentFilter() {
+        return filterValuePresent;
+      }
+
+      // Returns the top K selected records based on this dimension's order.
+      // Note: observes this dimension's filter, unlike group and groupAll.
+      function top(k, top_offset) {
+        var array = [],
+            i = hi0,
+            j,
+            toSkip = 0;
+
+        if(top_offset && top_offset > 0) toSkip = top_offset;
+
+        while (--i >= lo0 && k > 0) {
+          if (filters.zero(j = index[i])) {
+            if(toSkip > 0) {
+              //skip matching row
+              --toSkip;
+            } else {
+              array.push(data[j]);
+              --k;
+            }
+          }
+        }
+
+        if(iterable){
+          for(i = 0; i < iterablesEmptyRows.length && k > 0; i++) {
+            // Add row with empty iterable column at the end
+            if(filters.zero(j = iterablesEmptyRows[i])) {
+              if(toSkip > 0) {
+                //skip matching row
+                --toSkip;
+              } else {
+                array.push(data[j]);
+                --k;
+              }
+            }
+          }
+        }
+
+        return array;
+      }
+
+      // Returns the bottom K selected records based on this dimension's order.
+      // Note: observes this dimension's filter, unlike group and groupAll.
+      function bottom(k, bottom_offset) {
+        var array = [],
+            i,
+            j,
+            toSkip = 0;
+
+        if(bottom_offset && bottom_offset > 0) toSkip = bottom_offset;
+
+        if(iterable) {
+          // Add row with empty iterable column at the top
+          for(i = 0; i < iterablesEmptyRows.length && k > 0; i++) {
+            if(filters.zero(j = iterablesEmptyRows[i])) {
+              if(toSkip > 0) {
+                //skip matching row
+                --toSkip;
+              } else {
+                array.push(data[j]);
+                --k;
+              }
+            }
+          }
+        }
+
+        i = lo0;
+
+        while (i < hi0 && k > 0) {
+          if (filters.zero(j = index[i])) {
+            if(toSkip > 0) {
+              //skip matching row
+              --toSkip;
+            } else {
+              array.push(data[j]);
+              --k;
+            }
+          }
+          i++;
+        }
+
+        return array;
+      }
+
+      // Adds a new group to this dimension, using the specified key function.
+      function group(key) {
+        var group = {
+          top: top,
+          all: all,
+          reduce: reduce,
+          reduceCount: reduceCount,
+          reduceSum: reduceSum,
+          order: order,
+          orderNatural: orderNatural,
+          size: size,
+          dispose: dispose,
+          remove: dispose // for backwards-compatibility
+        };
+
+        // Ensure that this group will be removed when the dimension is removed.
+        dimensionGroups.push(group);
+
+        var groups, // array of {key, value}
+            groupIndex, // object id ↦ group id
+            groupWidth = 8,
+            groupCapacity = capacity(groupWidth),
+            k = 0, // cardinality
+            select,
+            heap,
+            reduceAdd,
+            reduceRemove,
+            reduceInitial,
+            update = cr_null,
+            reset = cr_null,
+            resetNeeded = true,
+            groupAll = key === cr_null,
+            n0old;
+
+        if (arguments.length < 1) key = cr_identity;
+
+        // The group listens to the crossfilter for when any dimension changes, so
+        // that it can update the associated reduce values. It must also listen to
+        // the parent dimension for when data is added, and compute new keys.
+        filterListeners.push(update);
+        indexListeners.push(add);
+        removeDataListeners.push(removeData);
+
+        // Incorporate any existing data into the grouping.
+        add(values, index, 0, n);
+
+        // Incorporates the specified new values into this group.
+        // This function is responsible for updating groups and groupIndex.
+        function add(newValues, newIndex, n0, n1) {
+
+          if(iterable) {
+            n0old = n0;
+            n0 = values.length - newValues.length;
+            n1 = newValues.length;
+          }
+
+          var oldGroups = groups,
+              reIndex = iterable ? [] : cr_index(k, groupCapacity),
+              add = reduceAdd,
+              remove = reduceRemove,
+              initial = reduceInitial,
+              k0 = k, // old cardinality
+              i0 = 0, // index of old group
+              i1 = 0, // index of new record
+              j, // object id
+              g0, // old group
+              x0, // old key
+              x1, // new key
+              g, // group to add
+              x; // key of group to add
+
+          // If a reset is needed, we don't need to update the reduce values.
+          if (resetNeeded) add = initial = cr_null;
+          if (resetNeeded) remove = initial = cr_null;
+
+          // Reset the new groups (k is a lower bound).
+          // Also, make sure that groupIndex exists and is long enough.
+          groups = new Array(k), k = 0;
+          if(iterable){
+            groupIndex = k0 ? groupIndex : [];
+          }
+          else {
+            groupIndex = k0 > 1 ? xfilterArray.arrayLengthen(groupIndex, n) : cr_index(n, groupCapacity);
+          }
+
+
+          // Get the first old key (x0 of g0), if it exists.
+          if (k0) x0 = (g0 = oldGroups[0]).key;
+
+          // Find the first new key (x1), skipping NaN keys.
+          while (i1 < n1 && !((x1 = key(newValues[i1])) >= x1)) ++i1;
+
+          // While new keys remain…
+          while (i1 < n1) {
+
+            // Determine the lesser of the two current keys; new and old.
+            // If there are no old keys remaining, then always add the new key.
+            if (g0 && x0 <= x1) {
+              g = g0, x = x0;
+
+              // Record the new index of the old group.
+              reIndex[i0] = k;
+
+              // Retrieve the next old key.
+              g0 = oldGroups[++i0];
+              if (g0) x0 = g0.key;
+            } else {
+              g = {key: x1, value: initial()}, x = x1;
+            }
+
+            // Add the lesser group.
+            groups[k] = g;
+
+            // Add any selected records belonging to the added group, while
+            // advancing the new key and populating the associated group index.
+
+            while (x1 <= x) {
+              j = newIndex[i1] + (iterable ? n0old : n0);
+
+
+              if(iterable){
+                if(groupIndex[j]){
+                  groupIndex[j].push(k);
+                }
+                else {
+                  groupIndex[j] = [k];
+                }
+              }
+              else {
+                groupIndex[j] = k;
+              }
+
+              // Always add new values to groups. Only remove when not in filter.
+              // This gives groups full information on data life-cycle.
+              g.value = add(g.value, data[j], true);
+              if (!filters.zeroExcept(j, offset, zero)) g.value = remove(g.value, data[j], false);
+              if (++i1 >= n1) break;
+              x1 = key(newValues[i1]);
+            }
+
+            groupIncrement();
+          }
+
+          // Add any remaining old groups that were greater th1an all new keys.
+          // No incremental reduce is needed; these groups have no new records.
+          // Also record the new index of the old group.
+          while (i0 < k0) {
+            groups[reIndex[i0] = k] = oldGroups[i0++];
+            groupIncrement();
+          }
+
+
+          // Fill in gaps with empty arrays where there may have been rows with empty iterables
+          if(iterable){
+            for (var index1 = 0; index1 < n; index1++) {
+              if(!groupIndex[index1]){
+                groupIndex[index1] = [];
+              }
+            }
+          }
+
+          // If we added any new groups before any old groups,
+          // update the group index of all the old records.
+          if(k > i0){
+            if(iterable){
+              for (i0 = 0; i0 < n0old; ++i0) {
+                for (index1 = 0; index1 < groupIndex[i0].length; index1++) {
+                  groupIndex[i0][index1] = reIndex[groupIndex[i0][index1]];
+                }
+              }
+            }
+            else {
+              for (i0 = 0; i0 < n0; ++i0) {
+                groupIndex[i0] = reIndex[groupIndex[i0]];
+              }
+            }
+          }
+
+          // Modify the update and reset behavior based on the cardinality.
+          // If the cardinality is less than or equal to one, then the groupIndex
+          // is not needed. If the cardinality is zero, then there are no records
+          // and therefore no groups to update or reset. Note that we also must
+          // change the registered listener to point to the new method.
+          j = filterListeners.indexOf(update);
+          if (k > 1 || iterable) {
+            update = updateMany;
+            reset = resetMany;
+          } else {
+            if (!k && groupAll) {
+              k = 1;
+              groups = [{key: null, value: initial()}];
+            }
+            if (k === 1) {
+              update = updateOne;
+              reset = resetOne;
+            } else {
+              update = cr_null;
+              reset = cr_null;
+            }
+            groupIndex = null;
+          }
+          filterListeners[j] = update;
+
+          // Count the number of added groups,
+          // and widen the group index as needed.
+          function groupIncrement() {
+            if(iterable){
+              k++;
+              return
+            }
+            if (++k === groupCapacity) {
+              reIndex = xfilterArray.arrayWiden(reIndex, groupWidth <<= 1);
+              groupIndex = xfilterArray.arrayWiden(groupIndex, groupWidth);
+              groupCapacity = capacity(groupWidth);
+            }
+          }
+        }
+
+        function removeData(reIndex) {
+          if (k > 1 || iterable) {
+            var oldK = k,
+                oldGroups = groups,
+                seenGroups = cr_index(oldK, oldK),
+                i,
+                i0,
+                j;
+
+            // Filter out non-matches by copying matching group index entries to
+            // the beginning of the array.
+            if (!iterable) {
+              for (i = 0, j = 0; i < n; ++i) {
+                if (reIndex[i] !== REMOVED_INDEX) {
+                  seenGroups[groupIndex[j] = groupIndex[i]] = 1;
+                  ++j;
+                }
+              }
+            } else {
+              for (i = 0, j = 0; i < n; ++i) {
+                if (reIndex[i] !== REMOVED_INDEX) {
+                  groupIndex[j] = groupIndex[i];
+                  for (i0 = 0; i0 < groupIndex[j].length; i0++) {
+                    seenGroups[groupIndex[j][i0]] = 1;
+                  }
+                  ++j;
+                }
+              }
+              groupIndex = groupIndex.slice(0, j);
+            }
+
+            // Reassemble groups including only those groups that were referred
+            // to by matching group index entries.  Note the new group index in
+            // seenGroups.
+            groups = [], k = 0;
+            for (i = 0; i < oldK; ++i) {
+              if (seenGroups[i]) {
+                seenGroups[i] = k++;
+                groups.push(oldGroups[i]);
+              }
+            }
+
+            if (k > 1 || iterable) {
+              // Reindex the group index using seenGroups to find the new index.
+              if (!iterable) {
+                for (i = 0; i < j; ++i) groupIndex[i] = seenGroups[groupIndex[i]];
+              } else {
+                for (i = 0; i < j; ++i) {
+                  for (i0 = 0; i0 < groupIndex[i].length; ++i0) {
+                    groupIndex[i][i0] = seenGroups[groupIndex[i][i0]];
+                  }
+                }
+              }
+            } else {
+              groupIndex = null;
+            }
+            filterListeners[filterListeners.indexOf(update)] = k > 1 || iterable
+                ? (reset = resetMany, update = updateMany)
+                : k === 1 ? (reset = resetOne, update = updateOne)
+                : reset = update = cr_null;
+          } else if (k === 1) {
+            if (groupAll) return;
+            for (var index3 = 0; index3 < n; ++index3) if (reIndex[index3] !== REMOVED_INDEX) return;
+            groups = [], k = 0;
+            filterListeners[filterListeners.indexOf(update)] =
+            update = reset = cr_null;
+          }
+        }
+
+        // Reduces the specified selected or deselected records.
+        // This function is only used when the cardinality is greater than 1.
+        // notFilter indicates a crossfilter.add/remove operation.
+        function updateMany(filterOne, filterOffset, added, removed, notFilter) {
+
+          if ((filterOne === one && filterOffset === offset) || resetNeeded) return;
+
+          var i,
+              j,
+              k,
+              n,
+              g;
+
+          if(iterable){
+            // Add the added values.
+            for (i = 0, n = added.length; i < n; ++i) {
+              if (filters.zeroExcept(k = added[i], offset, zero)) {
+                for (j = 0; j < groupIndex[k].length; j++) {
+                  g = groups[groupIndex[k][j]];
+                  g.value = reduceAdd(g.value, data[k], false, j);
+                }
+              }
+            }
+
+            // Remove the removed values.
+            for (i = 0, n = removed.length; i < n; ++i) {
+              if (filters.onlyExcept(k = removed[i], offset, zero, filterOffset, filterOne)) {
+                for (j = 0; j < groupIndex[k].length; j++) {
+                  g = groups[groupIndex[k][j]];
+                  g.value = reduceRemove(g.value, data[k], notFilter, j);
+                }
+              }
+            }
+            return;
+          }
+
+          // Add the added values.
+          for (i = 0, n = added.length; i < n; ++i) {
+            if (filters.zeroExcept(k = added[i], offset, zero)) {
+              g = groups[groupIndex[k]];
+              g.value = reduceAdd(g.value, data[k], false);
+            }
+          }
+
+          // Remove the removed values.
+          for (i = 0, n = removed.length; i < n; ++i) {
+            if (filters.onlyExcept(k = removed[i], offset, zero, filterOffset, filterOne)) {
+              g = groups[groupIndex[k]];
+              g.value = reduceRemove(g.value, data[k], notFilter);
+            }
+          }
+        }
+
+        // Reduces the specified selected or deselected records.
+        // This function is only used when the cardinality is 1.
+        // notFilter indicates a crossfilter.add/remove operation.
+        function updateOne(filterOne, filterOffset, added, removed, notFilter) {
+          if ((filterOne === one && filterOffset === offset) || resetNeeded) return;
+
+          var i,
+              k,
+              n,
+              g = groups[0];
+
+          // Add the added values.
+          for (i = 0, n = added.length; i < n; ++i) {
+            if (filters.zeroExcept(k = added[i], offset, zero)) {
+              g.value = reduceAdd(g.value, data[k], false);
+            }
+          }
+
+          // Remove the removed values.
+          for (i = 0, n = removed.length; i < n; ++i) {
+            if (filters.onlyExcept(k = removed[i], offset, zero, filterOffset, filterOne)) {
+              g.value = reduceRemove(g.value, data[k], notFilter);
+            }
+          }
+        }
+
+        // Recomputes the group reduce values from scratch.
+        // This function is only used when the cardinality is greater than 1.
+        function resetMany() {
+          var i,
+              j,
+              g;
+
+          // Reset all group values.
+          for (i = 0; i < k; ++i) {
+            groups[i].value = reduceInitial();
+          }
+
+          // We add all records and then remove filtered records so that reducers
+          // can build an 'unfiltered' view even if there are already filters in
+          // place on other dimensions.
+          if(iterable){
+            for (i = 0; i < n; ++i) {
+              for (j = 0; j < groupIndex[i].length; j++) {
+                g = groups[groupIndex[i][j]];
+                g.value = reduceAdd(g.value, data[i], true, j);
+              }
+            }
+            for (i = 0; i < n; ++i) {
+              if (!filters.zeroExcept(i, offset, zero)) {
+                for (j = 0; j < groupIndex[i].length; j++) {
+                  g = groups[groupIndex[i][j]];
+                  g.value = reduceRemove(g.value, data[i], false, j);
+                }
+              }
+            }
+            return;
+          }
+
+          for (i = 0; i < n; ++i) {
+            g = groups[groupIndex[i]];
+            g.value = reduceAdd(g.value, data[i], true);
+          }
+          for (i = 0; i < n; ++i) {
+            if (!filters.zeroExcept(i, offset, zero)) {
+              g = groups[groupIndex[i]];
+              g.value = reduceRemove(g.value, data[i], false);
+            }
+          }
+        }
+
+        // Recomputes the group reduce values from scratch.
+        // This function is only used when the cardinality is 1.
+        function resetOne() {
+          var i,
+              g = groups[0];
+
+          // Reset the singleton group values.
+          g.value = reduceInitial();
+
+          // We add all records and then remove filtered records so that reducers
+          // can build an 'unfiltered' view even if there are already filters in
+          // place on other dimensions.
+          for (i = 0; i < n; ++i) {
+            g.value = reduceAdd(g.value, data[i], true);
+          }
+
+          for (i = 0; i < n; ++i) {
+            if (!filters.zeroExcept(i, offset, zero)) {
+              g.value = reduceRemove(g.value, data[i], false);
+            }
+          }
+        }
+
+        // Returns the array of group values, in the dimension's natural order.
+        function all() {
+          if (resetNeeded) reset(), resetNeeded = false;
+          return groups;
+        }
+
+        // Returns a new array containing the top K group values, in reduce order.
+        function top(k) {
+          var top = select(all(), 0, groups.length, k);
+          return heap.sort(top, 0, top.length);
+        }
+
+        // Sets the reduce behavior for this group to use the specified functions.
+        // This method lazily recomputes the reduce values, waiting until needed.
+        function reduce(add, remove, initial) {
+          reduceAdd = add;
+          reduceRemove = remove;
+          reduceInitial = initial;
+          resetNeeded = true;
+          return group;
+        }
+
+        // A convenience method for reducing by count.
+        function reduceCount() {
+          return reduce(xfilterReduce.reduceIncrement, xfilterReduce.reduceDecrement, cr_zero);
+        }
+
+        // A convenience method for reducing by sum(value).
+        function reduceSum(value) {
+          return reduce(xfilterReduce.reduceAdd(value), xfilterReduce.reduceSubtract(value), cr_zero);
+        }
+
+        // Sets the reduce order, using the specified accessor.
+        function order(value) {
+          select = h.by(valueOf);
+          heap = h$1.by(valueOf);
+          function valueOf(d) { return value(d.value); }
+          return group;
+        }
+
+        // A convenience method for natural ordering by reduce value.
+        function orderNatural() {
+          return order(cr_identity);
+        }
+
+        // Returns the cardinality of this group, irrespective of any filters.
+        function size() {
+          return k;
+        }
+
+        // Removes this group and associated event listeners.
+        function dispose() {
+          var i = filterListeners.indexOf(update);
+          if (i >= 0) filterListeners.splice(i, 1);
+          i = indexListeners.indexOf(add);
+          if (i >= 0) indexListeners.splice(i, 1);
+          i = removeDataListeners.indexOf(removeData);
+          if (i >= 0) removeDataListeners.splice(i, 1);
+          i = dimensionGroups.indexOf(group);
+          if (i >= 0) dimensionGroups.splice(i, 1);
+          return group;
+        }
+
+        return reduceCount().orderNatural();
+      }
+
+      // A convenience function for generating a singleton group.
+      function groupAll() {
+        var g = group(cr_null), all = g.all;
+        delete g.all;
+        delete g.top;
+        delete g.order;
+        delete g.orderNatural;
+        delete g.size;
+        g.value = function() { return all()[0].value; };
+        return g;
+      }
+
+      // Removes this dimension and associated groups and event listeners.
+      function dispose() {
+        dimensionGroups.forEach(function(group) { group.dispose(); });
+        var i = dataListeners.indexOf(preAdd);
+        if (i >= 0) dataListeners.splice(i, 1);
+        i = dataListeners.indexOf(postAdd);
+        if (i >= 0) dataListeners.splice(i, 1);
+        i = removeDataListeners.indexOf(removeData);
+        if (i >= 0) removeDataListeners.splice(i, 1);
+        filters.masks[offset] &= zero;
+        return filterAll();
+      }
+
+      return dimension;
+    }
+
+    // A convenience method for groupAll on a dummy dimension.
+    // This implementation can be optimized since it always has cardinality 1.
+    function groupAll() {
+      var group = {
+        reduce: reduce,
+        reduceCount: reduceCount,
+        reduceSum: reduceSum,
+        value: value,
+        dispose: dispose,
+        remove: dispose // for backwards-compatibility
+      };
+
+      var reduceValue,
+          reduceAdd,
+          reduceRemove,
+          reduceInitial,
+          resetNeeded = true;
+
+      // The group listens to the crossfilter for when any dimension changes, so
+      // that it can update the reduce value. It must also listen to the parent
+      // dimension for when data is added.
+      filterListeners.push(update);
+      dataListeners.push(add);
+
+      // For consistency; actually a no-op since resetNeeded is true.
+      add(data, 0);
+
+      // Incorporates the specified new values into this group.
+      function add(newData, n0) {
+        var i;
+
+        if (resetNeeded) return;
+
+        // Cycle through all the values.
+        for (i = n0; i < n; ++i) {
+
+          // Add all values all the time.
+          reduceValue = reduceAdd(reduceValue, data[i], true);
+
+          // Remove the value if filtered.
+          if (!filters.zero(i)) {
+            reduceValue = reduceRemove(reduceValue, data[i], false);
+          }
+        }
+      }
+
+      // Reduces the specified selected or deselected records.
+      function update(filterOne, filterOffset, added, removed, notFilter) {
+        var i,
+            k,
+            n;
+
+        if (resetNeeded) return;
+
+        // Add the added values.
+        for (i = 0, n = added.length; i < n; ++i) {
+          if (filters.zero(k = added[i])) {
+            reduceValue = reduceAdd(reduceValue, data[k], notFilter);
+          }
+        }
+
+        // Remove the removed values.
+        for (i = 0, n = removed.length; i < n; ++i) {
+          if (filters.only(k = removed[i], filterOffset, filterOne)) {
+            reduceValue = reduceRemove(reduceValue, data[k], notFilter);
+          }
+        }
+      }
+
+      // Recomputes the group reduce value from scratch.
+      function reset() {
+        var i;
+
+        reduceValue = reduceInitial();
+
+        // Cycle through all the values.
+        for (i = 0; i < n; ++i) {
+
+          // Add all values all the time.
+          reduceValue = reduceAdd(reduceValue, data[i], true);
+
+          // Remove the value if it is filtered.
+          if (!filters.zero(i)) {
+            reduceValue = reduceRemove(reduceValue, data[i], false);
+          }
+        }
+      }
+
+      // Sets the reduce behavior for this group to use the specified functions.
+      // This method lazily recomputes the reduce value, waiting until needed.
+      function reduce(add, remove, initial) {
+        reduceAdd = add;
+        reduceRemove = remove;
+        reduceInitial = initial;
+        resetNeeded = true;
+        return group;
+      }
+
+      // A convenience method for reducing by count.
+      function reduceCount() {
+        return reduce(xfilterReduce.reduceIncrement, xfilterReduce.reduceDecrement, cr_zero);
+      }
+
+      // A convenience method for reducing by sum(value).
+      function reduceSum(value) {
+        return reduce(xfilterReduce.reduceAdd(value), xfilterReduce.reduceSubtract(value), cr_zero);
+      }
+
+      // Returns the computed reduce value.
+      function value() {
+        if (resetNeeded) reset(), resetNeeded = false;
+        return reduceValue;
+      }
+
+      // Removes this group and associated event listeners.
+      function dispose() {
+        var i = filterListeners.indexOf(update);
+        if (i >= 0) filterListeners.splice(i, 1);
+        i = dataListeners.indexOf(add);
+        if (i >= 0) dataListeners.splice(i, 1);
+        return group;
+      }
+
+      return reduceCount();
+    }
+
+    // Returns the number of records in this crossfilter, irrespective of any filters.
+    function size() {
+      return n;
+    }
+
+    // Returns the raw row data contained in this crossfilter
+    function all(){
+      return data;
+    }
+
+    // Returns row data with all dimension filters applied, except for filters in ignore_dimensions
+    function allFiltered(ignore_dimensions) {
+      var array = [],
+          i = 0,
+          mask = maskForDimensions(ignore_dimensions || []);
+
+        for (i = 0; i < n; i++) {
+          if (filters.zeroExceptMask(i, mask)) {
+            array.push(data[i]);
+          }
+        }
+
+        return array;
+    }
+
+    function onChange(cb){
+      if(typeof cb !== 'function'){
+        /* eslint no-console: 0 */
+        console.warn('onChange callback parameter must be a function!');
+        return;
+      }
+      callbacks.push(cb);
+      return function(){
+        callbacks.splice(callbacks.indexOf(cb), 1);
+      };
+    }
+
+    function triggerOnChange(eventName){
+      for (var i = 0; i < callbacks.length; i++) {
+        callbacks[i](eventName);
+      }
+    }
+
+    return arguments.length
+        ? add(arguments[0])
+        : crossfilter;
+  }
+
+  // Returns an array of size n, big enough to store ids up to m.
+  function cr_index(n, m) {
+    return (m < 0x101
+        ? xfilterArray.array8 : m < 0x10001
+        ? xfilterArray.array16
+        : xfilterArray.array32)(n);
+  }
+
+  // Constructs a new array of size n, with sequential values from 0 to n - 1.
+  function cr_range(n) {
+    var range = cr_index(n, n);
+    for (var i = -1; ++i < n;) range[i] = i;
+    return range;
+  }
+
+  function capacity(w) {
+    return w === 8
+        ? 0x100 : w === 16
+        ? 0x10000
+        : 0x100000000;
+  }
+
+  function html2element(html) {
+    var template = document.createElement('template');
+    template.innerHTML = html.trim(); // Never return a text node of whitespace as the result
+
+    return template.content.firstChild;
+  } // html2element
+
+  function calculateExponent(val) {
+    // calculate the exponent for the scientific notation.
+    var exp = 0;
+
+    while (Math.floor(Math.abs(val) / Math.pow(10, exp + 1)) > 0) {
+      exp += 1;
+    } // Convert the exponent to multiple of three
+
+
+    return Math.floor(exp / 3) * 3;
+  } // 
+  // From regular helpers.
+
+  function unique(d) {
+    // https://stackoverflow.com/questions/1960473/get-all-unique-values-in-a-javascript-array-remove-duplicates
+    function onlyUnique(value, index, self) {
+      return self.indexOf(value) === index;
+    } // unique
+
+
+    return d.filter(onlyUnique);
+  } // unique
+
+  var ObservableVariable = /*#__PURE__*/function () {
+    function ObservableVariable(initialvalue) {
+      _classCallCheck(this, ObservableVariable);
+
+      this._value = undefined;
+      this.subscribers = [];
+      var obj = this;
+      obj._value = initialvalue;
+    } // constructor
+
+
+    _createClass(ObservableVariable, [{
+      key: "value",
+      get: // set value
+      function get() {
+        return this._value;
+      } // get value
+      ,
+      set: function set(v) {
+        var obj = this;
+        obj._value = v;
+        obj.update();
+      }
+    }, {
+      key: "subscribe",
+      value: function subscribe(f) {
+        var obj = this;
+        obj.subscribers.push(f);
+      } // subscribe
+
+    }, {
+      key: "update",
+      value: function update() {
+        var obj = this;
+        obj.subscribers.forEach(function (f) {
+          f();
+        }); // forEach
+      } // update
+
+    }]);
+
+    return ObservableVariable;
+  }(); // ObservableVariable
+
   var dataStorage = /*#__PURE__*/function () {
+    // Filtering
     // Highlighting
+    // Detail plot accessors.
+    // Plots need to be held by the data, because in the case a plot variable is changed the relevant filter needs to be removed.
     function dataStorage() {
       _classCallCheck(this, dataStorage);
 
-      this.tasks = undefined;
+      this.tasks = [];
+      this.filters = {};
+      this.subset = new ObservableVariable([]);
       this.currentlocked = false;
       this.current = undefined;
       this.datum = undefined;
@@ -212,29 +2219,154 @@
           return d.contour["mach"];
         }
       }];
+      this.plots = [];
+      var obj = this; // Initiate a crossfilter object.
+
+      obj.crossfilter = crossfilter(); // And initiate a general dimension. Does this one get trimmed immediately?
+
+      obj.taskdim = obj.crossfilter.dimension(function (d) {
+        return d.taskId;
+      });
     } // constructor
-    // DATA IMPORT
+    // Function that allows plots to trigger general updates.
 
 
     _createClass(dataStorage, [{
-      key: "settasks",
-      value: function settasks(tasks) {
+      key: "repaint",
+      value: function repaint() {
         var obj = this;
-        obj.tasks = reformatTasks(tasks);
+        obj.plots.forEach(function (p) {
+          p.repaint();
+        }); // forEach
+      } // repaint
 
-        obj.updateextent();
-      } // settasks
+      /* FILTERING
+         What should happen when the plot sets a dimension, but then the user navigates away. Should the selection persist, or should that filter be removed? I think removed. But this means that dataStorage must listen to variable changes. Maybe that's the simplest way - just monitor active dimensions all the time.
+      */
 
     }, {
-      key: "addtasks",
-      value: function addtasks(tasks) {
+      key: "filtertrim",
+      value: function filtertrim() {
+        // Check which filtering dimensions are still valid.
+        var obj = this; // Check which filters are still active. This should be only for plots that support filtering though...
+
+        var plotvariables = obj.plots.reduce(function (acc, p) {
+          var xname = p.svgobj.x.variable.name;
+          var yname = p.svgobj.y.variable.name;
+          return acc.concat([xname, yname].filter(function (n) {
+            return n;
+          }));
+        }, []); // reduce
+
+        var admissiblefiltervariables = unique(plotvariables); // Now go through the dimensions and delete anz dimensions that are no longer needed. These are dimensions that do not appear as plot variables.
+
+        for (var dimensionname in obj.filters) {
+          if (!admissiblefiltervariables.includes(dimensionname)) {
+            obj.filters[dimensionname].dim.filterAll();
+            delete obj.filters[dimensionname];
+          } // if
+
+        } // for
+
+
+        obj.filterupdate();
+      } // filtertrim
+
+    }, {
+      key: "filterapply",
+      value: function filterapply(variablename, interval) {
+        var obj = this; // In some cases this function can be called with an undefined variablename, but a defined interval.
+        // Loop through the filters and either create additional dimensions, or set the desired interval range to existing dimensions.
+
+        if (variablename && !obj.filters[variablename]) {
+          // The range is required so that plots can access the data required to update their brushes.
+          filterset = {
+            range: interval,
+            dim: obj.crossfilter.dimension(function (d) {
+              return d.metadata[variablename];
+            })
+          };
+          obj.filters[variablename] = filterset;
+        } // if
+        // Now if the correct filterset is defined apply hte filter.
+
+
+        var filterset = obj.filters[variablename];
+
+        if (filterset) {
+          filterset.range = interval;
+          filterset.dim.filter(function (d) {
+            return d >= interval[0] && d <= interval[1];
+          }); // filter
+
+          obj.filterupdate();
+        } // if
+
+      } // filterapply
+
+    }, {
+      key: "filterremove",
+      value: function filterremove(variablename) {
+        var obj = this;
+        var filterset = obj.filters[variablename];
+
+        if (filterset) {
+          filterset.range = [0, 0];
+          filterset.dim.filterAll();
+          obj.filterupdate();
+        } // if
+
+      } // filterremove
+
+    }, {
+      key: "filterupdate",
+      value: function filterupdate() {
+        // Pre-save a crossfilter query.
+        var obj = this;
+        obj.subset.value = obj.taskdim.top(Infinity);
+      } // filterupdate
+      // DATA IMPORT
+
+    }, {
+      key: "replace",
+      value: function replace(tasks) {
+        var obj = this;
+        obj.tasks = reformatTasks(tasks);
+        obj.crossfilter.remove();
+        obj.crossfilter.add(obj.tasks); // The actual distribution data is created for individual task objects, and the `distributions' property are helpers for the plots - they are given to the plots to specify which distribution they should use.
+
+        obj.updateextent();
+      } // replace
+
+    }, {
+      key: "add",
+      value: function add(tasks) {
         // Instead of replacing the data, merge the previous and the old data.
         var obj = this;
-        var existingtasks = obj.tasks ? obj.tasks : [];
-        var mergedtasks = existingtasks.concat(reformatTasks(tasks));
-        obj.tasks = mergedtasks;
+        var existingtasks = obj.tasks;
+        var newtasks = reformatTasks(tasks);
+        obj.tasks = existingtasks.concat(newtasks);
+        obj.crossfilter.add(newtasks);
+        obj.updatevariablenames();
         obj.updateextent();
-      } // addtasks
+      } // add
+
+    }, {
+      key: "updatevariablenames",
+      value: function updatevariablenames() {
+        // The variables objects cannot be created here! The variables objects NEED (!) to be created in the plots themselves, as the axis extents, and the variable extents by extension, need to be updated for each plot separately. But the available variablenames can be determined here.
+        var obj = this;
+
+        if (obj.tasks) {
+          // `dr' and `name' are the only allowed strings. dr is the filepath to the original data on Demetrios' machine.
+          obj.variablenames = Object.keys(obj.tasks[0].metadata).filter(function (name) {
+            return !["dr", "name"].includes(name);
+          });
+        } else {
+          obj.variablenames = [];
+        } // if
+
+      } // updatevariablenames
 
     }, {
       key: "updateextent",
@@ -290,7 +2422,7 @@
           obj.currentlocked = false;
         } // if
 
-      } // toggledatum
+      } // selecttask
 
     }, {
       key: "setcurrent",
@@ -500,24 +2632,65 @@
     return lines;
   } // matlabContour2drawLines
 
-  function html2element(html) {
-    var template = document.createElement('template');
-    template.innerHTML = html.trim(); // Never return a text node of whitespace as the result
+  var templateButton = "<button class=\"breadcrumb\"></button>";
+  var templateFolder = "<div class=\"collapsible\"></div>"; // The buttons are coordinated because all the frames are part of a 'folder' form.
 
-    return template.content.firstChild;
-  } // html2element
+  var CollapsibleFrame = /*#__PURE__*/function () {
+    function CollapsibleFrame(name) {
+      _classCallCheck(this, CollapsibleFrame);
 
-  function calculateExponent(val) {
-    // calculate the exponent for the scientific notation.
-    var exp = 0;
+      this.active = false;
+      var obj = this;
+      obj.button = html2element(templateButton);
+      obj.folder = html2element(templateFolder); // Keep name to allow construction of labels later on.
 
-    while (Math.floor(Math.abs(val) / Math.pow(10, exp + 1)) > 0) {
-      exp += 1;
-    } // Convert the exponent to multiple of three
+      obj.name = name;
+      obj.label();
+    } // constructor
 
 
-    return Math.floor(exp / 3) * 3;
-  } // calculateExponent
+    _createClass(CollapsibleFrame, [{
+      key: "update",
+      value: function update(active) {
+        var obj = this;
+
+        if (active) {
+          obj.button.classList.add("breadcrumb-active");
+          obj.folder.style.maxHeight = obj.folder.scrollHeight + "px";
+          obj.folder.style.paddingBottom = 30 + "px";
+        } else {
+          obj.button.classList.remove("breadcrumb-active");
+          obj.folder.style.maxHeight = null;
+          obj.folder.style.paddingBottom = 0 + "px";
+        } // if
+
+
+        obj.active = active;
+      } // update
+
+    }, {
+      key: "label",
+      value: function label(v) {
+        // Update the variable part of the label.
+        var obj = this;
+        obj.button.innerText = "".concat(obj.name, " ").concat(v ? v : "");
+      } // label
+
+    }], [{
+      key: "AddStyle",
+      value: function AddStyle() {
+        // This adds another css link to the header so that the elements get styled correctly. Perhaps it would be cleaner to do it in a more opaque way?
+        var el = document.createElement("link");
+        el.setAttribute("rel", "stylesheet");
+        el.setAttribute("type", "text/css");
+        el.setAttribute("href", "./code/src/support/CollapsibleFrame.css");
+        document.head.appendChild(el);
+      } // AddStyle
+
+    }]);
+
+    return CollapsibleFrame;
+  }(); // CollapsibleFrame
 
   function ascending$1(a, b) {
     return a < b ? -1 : a > b ? 1 : a >= b ? 0 : NaN;
@@ -576,6 +2749,25 @@
   const bisectRight = ascendingBisect.right;
   bisector(number$2).center;
 
+  function count(values, valueof) {
+    let count = 0;
+    if (valueof === undefined) {
+      for (let value of values) {
+        if (value != null && (value = +value) >= value) {
+          ++count;
+        }
+      }
+    } else {
+      let index = -1;
+      for (let value of values) {
+        if ((value = valueof(value, ++index, values)) != null && (value = +value) >= value) {
+          ++count;
+        }
+      }
+    }
+    return count;
+  }
+
   function extent(values, valueof) {
     let min;
     let max;
@@ -604,6 +2796,20 @@
       }
     }
     return [min, max];
+  }
+
+  function identity$5(x) {
+    return x;
+  }
+
+  var array$1 = Array.prototype;
+
+  var slice$1 = array$1.slice;
+
+  function constant$3(x) {
+    return function() {
+      return x;
+    };
   }
 
   var e10 = Math.sqrt(50),
@@ -659,6 +2865,141 @@
     else if (error >= e5) step1 *= 5;
     else if (error >= e2) step1 *= 2;
     return stop < start ? -step1 : step1;
+  }
+
+  function nice$1(start, stop, count) {
+    let prestep;
+    while (true) {
+      const step = tickIncrement(start, stop, count);
+      if (step === prestep || step === 0 || !isFinite(step)) {
+        return [start, stop];
+      } else if (step > 0) {
+        start = Math.floor(start / step) * step;
+        stop = Math.ceil(stop / step) * step;
+      } else if (step < 0) {
+        start = Math.ceil(start * step) / step;
+        stop = Math.floor(stop * step) / step;
+      }
+      prestep = step;
+    }
+  }
+
+  function thresholdSturges(values) {
+    return Math.ceil(Math.log(count(values)) / Math.LN2) + 1;
+  }
+
+  function bin() {
+    var value = identity$5,
+        domain = extent,
+        threshold = thresholdSturges;
+
+    function histogram(data) {
+      if (!Array.isArray(data)) data = Array.from(data);
+
+      var i,
+          n = data.length,
+          x,
+          values = new Array(n);
+
+      for (i = 0; i < n; ++i) {
+        values[i] = value(data[i], i, data);
+      }
+
+      var xz = domain(values),
+          x0 = xz[0],
+          x1 = xz[1],
+          tz = threshold(values, x0, x1);
+
+      // Convert number of thresholds into uniform thresholds, and nice the
+      // default domain accordingly.
+      if (!Array.isArray(tz)) {
+        const max = x1, tn = +tz;
+        if (domain === extent) [x0, x1] = nice$1(x0, x1, tn);
+        tz = ticks(x0, x1, tn);
+
+        // If the last threshold is coincident with the domain’s upper bound, the
+        // last bin will be zero-width. If the default domain is used, and this
+        // last threshold is coincident with the maximum input value, we can
+        // extend the niced upper bound by one tick to ensure uniform bin widths;
+        // otherwise, we simply remove the last threshold. Note that we don’t
+        // coerce values or the domain to numbers, and thus must be careful to
+        // compare order (>=) rather than strict equality (===)!
+        if (tz[tz.length - 1] >= x1) {
+          if (max >= x1 && domain === extent) {
+            const step = tickIncrement(x0, x1, tn);
+            if (isFinite(step)) {
+              if (step > 0) {
+                x1 = (Math.floor(x1 / step) + 1) * step;
+              } else if (step < 0) {
+                x1 = (Math.ceil(x1 * -step) + 1) / -step;
+              }
+            }
+          } else {
+            tz.pop();
+          }
+        }
+      }
+
+      // Remove any thresholds outside the domain.
+      var m = tz.length;
+      while (tz[0] <= x0) tz.shift(), --m;
+      while (tz[m - 1] > x1) tz.pop(), --m;
+
+      var bins = new Array(m + 1),
+          bin;
+
+      // Initialize bins.
+      for (i = 0; i <= m; ++i) {
+        bin = bins[i] = [];
+        bin.x0 = i > 0 ? tz[i - 1] : x0;
+        bin.x1 = i < m ? tz[i] : x1;
+      }
+
+      // Assign data to bins by value, ignoring any outside the domain.
+      for (i = 0; i < n; ++i) {
+        x = values[i];
+        if (x0 <= x && x <= x1) {
+          bins[bisectRight(tz, x, 0, m)].push(data[i]);
+        }
+      }
+
+      return bins;
+    }
+
+    histogram.value = function(_) {
+      return arguments.length ? (value = typeof _ === "function" ? _ : constant$3(_), histogram) : value;
+    };
+
+    histogram.domain = function(_) {
+      return arguments.length ? (domain = typeof _ === "function" ? _ : constant$3([_[0], _[1]]), histogram) : domain;
+    };
+
+    histogram.thresholds = function(_) {
+      return arguments.length ? (threshold = typeof _ === "function" ? _ : Array.isArray(_) ? constant$3(slice$1.call(_)) : constant$3(_), histogram) : threshold;
+    };
+
+    return histogram;
+  }
+
+  function max(values, valueof) {
+    let max;
+    if (valueof === undefined) {
+      for (const value of values) {
+        if (value != null
+            && (max < value || (max === undefined && value >= value))) {
+          max = value;
+        }
+      }
+    } else {
+      let index = -1;
+      for (let value of values) {
+        if ((value = valueof(value, ++index, values)) != null
+            && (max < value || (max === undefined && value >= value))) {
+          max = value;
+        }
+      }
+    }
+    return max;
   }
 
   var slice = Array.prototype.slice;
@@ -4983,20 +7324,20 @@
     btnDanger: "\n\t  background-color: crimson;\n\t  color: white;\n\t  float: right;\n    "
   }; // css
 
-  var template$6 = "\n\t<div style=\"".concat(css.card, "\">\n\t\t<div class=\"card-header\" style=\"").concat(css.cardHeader, "\">\n\t\t\t<input class=\"card-title\" spellcheck=\"false\"  style=\"").concat(css.plotTitle, "\" value=\"New Plot\">\n\t\t</div>\n\t\t\n\t\t<div class=\"card-body\">\n\t\t\n\t\t</div>\n\t</div>\n"); // template
+  var template$9 = "\n\t<div style=\"".concat(css.card, "\">\n\t\t<div class=\"card-header\" style=\"").concat(css.cardHeader, "\">\n\t\t\t<input class=\"card-title\" spellcheck=\"false\"  style=\"").concat(css.plotTitle, "\" value=\"New Plot\">\n\t\t</div>\n\t\t\n\t\t<div class=\"card-body\">\n\t\t\n\t\t</div>\n\t</div>\n"); // template
 
   var plotframe = function plotframe() {
     _classCallCheck(this, plotframe);
 
     var obj = this;
-    obj.node = html2element(template$6);
+    obj.node = html2element(template$9);
   } // constructor	
   ;
    // plotframe
 
   var variablemenustyle = "\n  background-color: white;\n  border: 2px solid black;\n  border-radius: 5px;\n  display: none; \n  position: absolute;\n  max-height: 120px;\n  overflow-y: auto;\n";
   var ulstyle = "\n  list-style-type: none;\n  font-size: 10px;\n  font-weight: bold;\n  padding-left: 4px;\n  padding-right: 4px;\n";
-  var template$5 = "\n<div class=\"variable-select-menu\" style=\"".concat(variablemenustyle, "\">\n  <ul style=\"").concat(ulstyle, "\">\n  </ul>\n</div>\n"); // Differentite between an x and a y one.
+  var template$8 = "\n<div class=\"variable-select-menu\" style=\"".concat(variablemenustyle, "\">\n  <ul style=\"").concat(ulstyle, "\">\n  </ul>\n</div>\n"); // Differentite between an x and a y one.
 
   var divSelectMenu = /*#__PURE__*/function () {
     function divSelectMenu(axis) {
@@ -5008,7 +7349,7 @@
         extent: [1, 1]
       };
       var obj = this;
-      obj.node = html2element(template$5);
+      obj.node = html2element(template$8);
 
       obj.node.onclick = function (event) {
         return event.stopPropagation();
@@ -5077,11 +7418,11 @@
   scales
   */
 
-  var textattributes = "fill=\"black\" font-size=\"10px\" font-weight=\"bold\"";
-  var exponenttemplate = "\n<text class=\"linear\" ".concat(textattributes, ">\n\t<tspan>\n\t  x10\n\t  <tspan class=\"exp\" dy=\"-5\"></tspan>\n\t</tspan>\n</text>\n");
-  var logtemplate = "\n<text class=\"log\" ".concat(textattributes, " display=\"none\">\n\t<tspan>\n\t  log\n\t  <tspan class=\"base\" dy=\"5\">10</tspan>\n\t  <tspan class=\"eval\" dy=\"-5\">(x)</tspan>\n\t</tspan>\n</text>\n"); // text -> x="-8" / y="-0.32em"
+  var textattributes$1 = "fill=\"black\" font-size=\"10px\" font-weight=\"bold\"";
+  var exponenttemplate$1 = "\n<text class=\"linear\" ".concat(textattributes$1, ">\n\t<tspan>\n\t  x10\n\t  <tspan class=\"exp\" dy=\"-5\"></tspan>\n\t</tspan>\n</text>\n");
+  var logtemplate$1 = "\n<text class=\"log\" ".concat(textattributes$1, " display=\"none\">\n\t<tspan>\n\t  log\n\t  <tspan class=\"base\" dy=\"5\">10</tspan>\n\t  <tspan class=\"eval\" dy=\"-5\">(x)</tspan>\n\t</tspan>\n</text>\n"); // text -> x="-8" / y="-0.32em"
 
-  var template$4 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate, "\n\t\t").concat(logtemplate, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
+  var template$7 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate$1, "\n\t\t").concat(logtemplate$1, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes$1, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes$1, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes$1, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
   // Now I need to add in a label saying linear/log
   // DONE!! Maybe a plus/minus next to the axes to increase the axis limits - instead of dragging the labels.
   // The changing between the variables is done in the parent, and not in the axis. This is simply because this class only controls it's own node, and there isn't space to show all the options. Therefore the parent must allocate the space for the change of variables.
@@ -5109,7 +7450,7 @@
 
       var obj = this; // make the axis group.
 
-      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$4);
+      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$7);
       obj.node = obj.d3node.node(); // Get rid of axis by abstracting?
 
       obj.axis = axis;
@@ -5499,7 +7840,7 @@
   exponent  : power exponent (big number labels may overlap otherwise)
   */
 
-  var template$3 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<rect class=\"zoom-area\" fill=\"rgb(255, 255, 255)\" width=\"400\" height=\"400\"></rect>\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"markup\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n"; // The axis scale needs to have access to the data and to the svg dimensions. Actually not access to the data, but access to the data extent. This has been solved by adding calculated extents to the variable objects.
+  var template$6 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<rect class=\"zoom-area\" fill=\"rgb(255, 255, 255)\" width=\"400\" height=\"400\"></rect>\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"markup\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n"; // The axis scale needs to have access to the data and to the svg dimensions. Actually not access to the data, but access to the data extent. This has been solved by adding calculated extents to the variable objects.
   // It's best to just pass all the variables to the axis, and let it handle everything connected to it. 
   // This class is a template for two interactive axes svg based plotting.
   // Handle the variable changing here!!!
@@ -5513,7 +7854,7 @@
       this.width = 400;
       this.height = 400;
       var obj = this;
-      obj.node = html2element(template$3); // Make the axis objects, and connect them to the menu selection.
+      obj.node = html2element(template$6); // Make the axis objects, and connect them to the menu selection.
       // `obj.plotbox' specifies the area of the SVG that the chart should be drawn to.
       // Variables must be set later.
 
@@ -5742,13 +8083,12 @@
     return variableobj;
   }(); // variableobj
 
-  var template$2 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"scatterplot\"></div>\n</div>\n";
+  var template$5 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"scatterplot\"></div>\n</div>\n";
 
   var scatterplot = /*#__PURE__*/function (_plotframe) {
     _inherits(scatterplot, _plotframe);
 
-    var _super = _createSuper(scatterplot); // Gets replaced by the actual data object.
-
+    var _super = _createSuper(scatterplot);
 
     function scatterplot(data) {
       var _this;
@@ -5757,18 +8097,13 @@
 
       _this = _super.call(this);
       _this.width = 400;
-      _this.data = {
-        current: undefined,
-        datum: undefined,
-        tasks: undefined
-      };
 
       var obj = _assertThisInitialized(_this);
 
       obj.data = data; // Append the plot backbone.
 
       var container = obj.node.querySelector("div.card-body");
-      container.appendChild(html2element(template$2)); // Add a scatterplot inset. When initialising already pass in the card size.
+      container.appendChild(html2element(template$5)); // Add a scatterplot inset. When initialising already pass in the card size.
 
       obj.svgobj = new twoInteractiveAxesInset([]);
       container.querySelector("div.scatterplot").appendChild(obj.svgobj.node);
@@ -5779,14 +8114,14 @@
       // Change the initial title
 
 
-      obj.node.querySelector("input.card-title").value = "Metadata";
+      obj.node.querySelector("input.card-title").value = "Scatterplot";
       return _this;
     } // constructor
 
 
     _createClass(scatterplot, [{
       key: "update",
-      value: function update(tasks) {
+      value: function update() {
         // Update this plot.
         var obj = this;
         obj.svgobj.update();
@@ -5797,23 +8132,14 @@
       key: "updatedata",
       value: function updatedata() {
         var obj = this;
-        var variables;
-
-        if (obj.data.tasks) {
-          // `dr' and `name' are the only allowed strings. dr is the filepath to the original data on Demetrios' machine.
-          variables = Object.getOwnPropertyNames(obj.data.tasks[0].metadata).filter(function (name) {
-            return !["dr", "name"].includes(name);
-          }).map(function (name) {
-            return new variableobj({
-              name: name,
-              extent: extent(obj.data.tasks, function (t) {
-                return t.metadata[name];
-              })
-            }); // new variableobj
-          });
-        } // if
-
-
+        var variables = obj.data.variablenames.map(function (name) {
+          return new variableobj({
+            name: name,
+            extent: extent(obj.data.tasks, function (t) {
+              return t.metadata[name];
+            })
+          }); // new variableobj
+        });
         obj.svgobj.update(variables);
         obj.draw();
       } // updatedata
@@ -5821,44 +8147,37 @@
     }, {
       key: "getcolor",
       value: function getcolor(d, defaultcolor) {
-        var obj = this; // If a current is prescribed, then any other ones should be gray.
-        // If a current is prescribed
+        var obj = this; // Just add in a condition that if the point is outside of the filter it should be gainsboro.
 
         var c = obj.data.current ? obj.data.current == d ? defaultcolor : "gainsboro" : defaultcolor;
         c = obj.data.datum == d ? "orange" : c;
         return c;
       } // getcolor
+      // Create teh actual SVG elements.
 
     }, {
       key: "draw",
       value: function draw() {
         // config:  data, gclass, color, showline.
         var obj = this;
+        var circles = select(obj.node).select("g.data").selectAll("circle").data(obj.data.subset.value); // First exit.
 
-        if (obj.data.tasks) {
-          var circles = select(obj.node).select("g.data").selectAll("circle").data(obj.data.tasks); // First exit.
+        circles.exit().remove(); // Finally add new circles.
 
-          circles.exit().remove(); // Finally add new circles.
-
-          circles.enter().append("circle").attr("r", 5).attr("cx", -10).attr("cy", -10).on("mouseenter", function (e, d) {
-            // obj.data.current = d;
-            obj.data.setcurrent(d);
-            obj.refresh();
-            obj.data.globalupdate();
-          }).on("mouseout", function (e, d) {
-            // obj.data.current = undefined;
-            obj.data.setcurrent(undefined);
-            obj.refresh();
-            obj.data.globalupdate();
-          }).on("click", function (e, d) {
-            // obj.data.datum = obj.data.datum == d ? undefined : d;
-            obj.data.selecttask(d);
-            obj.refresh();
-            obj.data.globalupdate();
-          });
-          obj.refresh();
-        } // if
-
+        circles.enter().append("circle").attr("r", 5).attr("cx", -10).attr("cy", -10).on("mouseenter", function (e, d) {
+          // obj.data.current = d;
+          obj.data.setcurrent(d);
+          obj.data.repaint();
+        }).on("mouseout", function (e, d) {
+          // obj.data.current = undefined;
+          obj.data.setcurrent(undefined);
+          obj.data.repaint();
+        }).on("click", function (e, d) {
+          // obj.data.datum = obj.data.datum == d ? undefined : d;
+          obj.data.selecttask(d);
+          obj.data.repaint();
+        });
+        obj.refresh();
       } // draw
       // Try to implement a smaller update possibility to try and improve interactivity.
 
@@ -5881,6 +8200,7 @@
         } // if	
 
       } // repaint
+      // Reposition and repaint the circles.
 
     }, {
       key: "refresh",
@@ -5904,6 +8224,928 @@
 
     return scatterplot;
   }(plotframe); // scatterplot
+
+  var brush = /*#__PURE__*/function () {
+    function brush(svg, g, type) {
+      _classCallCheck(this, brush);
+
+      this.p0 = [0, 0];
+      this.p1 = [0, 0]; // Both svg and g should be d3.select(node). Furthermore, allow functionality modes.
+
+      var obj = this;
+      obj.svg = svg;
+      obj.type = ["horizontal", "vertical", "2d"].includes(type) ? type : "2d"; // Extend to pass in both interaction and element hosts.
+
+      obj.rect = g.append("rect").attr("x", 0).attr("y", 0).attr("width", 0).attr("height", 0).attr("fill", "gray").attr("opacity", 0.4);
+      var active = false;
+      svg.addEventListener("mousedown", function (e) {
+        // Store start point.
+        obj.p0 = pointer(e);
+        obj.p1 = pointer(e);
+        active = true;
+      }); // mousedown
+
+      svg.addEventListener("mousemove", function (e) {
+        // Update the end point. Interactively update teh filters.
+        if (active) {
+          obj.p1 = pointer(e);
+          obj.update();
+        } // if
+
+      }); // mousemove
+
+      svg.addEventListener("mouseup", function (e) {
+        // If the points are too close together then the interval should be teh variable extent. Or the filter should be cleared.
+        if (dist(obj.p0, obj.p1) < Math.pow(5, 2)) {
+          obj.clear();
+        } else {
+          obj.submit();
+        } // if
+
+
+        active = false;
+      }); // mouseup
+      obj.rect.node();
+      /* THIS IS QUITE COMPLICATED!!!
+      rect.addEventListener("mousedown", function(e){
+      	e.stopPropagation();
+      	// If the user clicked on the rectangle, then the rectangle should be adjusted, as opposed to made from scratch.
+      	let box = rect.getBoundingClientRect();
+      	let point = [e.clientX - box.x, e.clientY - box.y];
+      	// console.log("edit", [point[0]/box.width, point[1]/box.height])
+      })
+         */
+    } // constructor
+
+
+    _createClass(brush, [{
+      key: "update",
+      value: function update(x, y, w, h) {
+        var obj = this; // Allow inputs to update brush.
+
+        var xd = x ? x : Math.min(obj.p0[0], obj.p1[0]);
+        var yd = y ? y : Math.min(obj.p0[1], obj.p1[1]);
+        var wd = w ? w : Math.abs(obj.p0[0] - obj.p1[0]);
+        var hd = h ? h : Math.abs(obj.p0[1] - obj.p1[1]); // For some brush types the width/height has to be set to the svg width/height.
+
+        var b = obj.svg.getBBox();
+        var xdt = obj.type == "vertical" ? 0 : xd;
+        var ydt = obj.type == "horizontal" ? 0 : yd;
+        var wdt = obj.type == "vertical" ? b.width : wd;
+        var hdt = obj.type == "horizontal" ? b.height : hd; // console.log( xdt,ydt,wdt,hdt )
+
+        obj.rect.attr("x", xdt).attr("y", ydt).attr("width", wdt).attr("height", hdt);
+      } // update
+      // Dummy functions to allow behavior to be prescribed.
+
+    }, {
+      key: "clear",
+      value: function clear() {} // clear
+
+    }, {
+      key: "submit",
+      value: function submit() {} // submit
+
+    }]);
+
+    return brush;
+  }(); // brush
+
+  function dist(a, b) {
+    return Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2);
+  } // dist
+
+  /*
+  Needs to update hte filtering dimensions. But also the dimensions should be dynamic?
+  How many dimensions will crossfilter support?
+
+
+  Filtering plots should highlight the filter setting - this is different functionality than comparison plots!!
+  But both could be combined!!
+  */
+
+  var filterscatterplot = /*#__PURE__*/function (_scatterplot) {
+    _inherits(filterscatterplot, _scatterplot);
+
+    var _super = _createSuper(filterscatterplot);
+
+    function filterscatterplot(data) {
+      var _this;
+
+      _classCallCheck(this, filterscatterplot);
+
+      _this = _super.call(this, data);
+
+      var obj = _assertThisInitialized(_this); // Add functionality to draw a rectangle... How will this be done since the scatterplot has to support zoom... For now the zoom can be disabled by removing the rectangle hosting it.
+
+
+      select(obj.svgobj.node).select("g.background").select("rect.zoom-area").remove(); // Now add the drawing of the box.
+
+      var svg = obj.svgobj.node.querySelector("svg");
+      var g = select(svg).select("g.markup");
+      obj.brush = new brush(svg, g, "2d");
+
+      obj.brush.clear = function () {
+        // Clear the filter
+        obj.data.filterremove(obj.svgobj.x.variable.name);
+        obj.data.filterremove(obj.svgobj.y.variable.name);
+      }; // clear
+
+
+      obj.brush.submit = function () {
+        // Apply the filter
+        var intervals = obj.calculateIntervals();
+        obj.data.filterapply(obj.svgobj.x.variable.name, intervals[0]);
+        obj.data.filterapply(obj.svgobj.y.variable.name, intervals[1]);
+      }; // submit
+      // Changing the variable on the axis should remove the filter, as it is no longer visible.
+
+
+      obj.svgobj.onupdate = function () {
+        obj.refresh();
+        obj.data.filtertrim();
+      }; // onupdate
+      // Subscribe the plot to any changes of the subset.
+
+
+      obj.data.subset.subscribe(function () {
+        obj.repaint();
+      }); // subscribe
+
+      return _this;
+    } // constructor
+
+
+    _createClass(filterscatterplot, [{
+      key: "repaint",
+      value: function repaint() {
+        // On user interactions the data is merely repainted, and not replaced to accelerate interactions. But the brushes do need to be updated.
+        _get(_getPrototypeOf(filterscatterplot.prototype), "repaint", this).call(this);
+
+        var obj = this; // Update the brush. But only show it if one of the ranges is defined.
+
+        var x = obj.data.filters[obj.svgobj.x.variable.name];
+        var y = obj.data.filters[obj.svgobj.y.variable.name];
+
+        if (x || y) {
+          var xrange = x ? x.range : obj.svgobj.x.variable.extent;
+          var yrange = y ? y.range : obj.svgobj.y.variable.extent;
+          obj.updateBrush([xrange, yrange]);
+        } // if
+
+      } // repaint
+
+    }, {
+      key: "calculateIntervals",
+      value: function calculateIntervals() {
+        // Calculate the intervals having been given two diagonally opposing points. The returned intervals should be in data units.
+        var obj = this;
+        var x = [obj.brush.p0[0], obj.brush.p1[0]];
+        var y = [obj.brush.p0[1], obj.brush.p1[1]];
+        return [x.map(function (v) {
+          return obj.svgobj.x.scale.invert(v);
+        }).sort(), y.map(function (v) {
+          return obj.svgobj.y.scale.invert(v);
+        }).sort()];
+      } // calculateIntervals
+
+    }, {
+      key: "updateBrush",
+      value: function updateBrush(intervals) {
+        var obj = this;
+        var x = obj.svgobj.x.scale;
+        var y = obj.svgobj.y.scale; // Note that the y-axis is inverted by default, so a high variable value converts to a small pixel value. Furthermore, the top left corner of the rectangle will be at the maximum value of the interval.
+
+        obj.brush.update(x(intervals[0][0]), y(intervals[1][1]), x(intervals[0][1]) - x(intervals[0][0]), y(intervals[1][0]) - y(intervals[1][1])); // console.log("width", intervals[0], x(intervals[0][1]) > x(intervals[0][0]) )
+        // console.log("height", intervals[1], y(intervals[1][0]) > y(intervals[1][1]) )
+      } // updateBrush
+
+    }]);
+
+    return filterscatterplot;
+  }(scatterplot); // filterscatterplot
+   // calculateRange
+
+  /* I want to support:
+   - linear		: scaleLinear
+   - logarithmic	: scaleLog - must not cross 0!!
+   
+   And variable types:
+   - number       : can be used as is.
+   - datetime		: scaleTime() 
+  		.domain([new Date(2000, 0, 1), new Date(2000, 0, 2)])
+  		.range([0, 960]);
+  scales
+  */
+
+  var textattributes = "fill=\"black\" font-size=\"10px\" font-weight=\"bold\"";
+  var exponenttemplate = "\n<text class=\"linear\" ".concat(textattributes, ">\n\t<tspan>\n\t  x10\n\t  <tspan class=\"exp\" dy=\"-5\"></tspan>\n\t</tspan>\n</text>\n");
+  var logtemplate = "\n<text class=\"log\" ".concat(textattributes, " display=\"none\">\n\t<tspan>\n\t  log\n\t  <tspan class=\"base\" dy=\"5\">10</tspan>\n\t  <tspan class=\"eval\" dy=\"-5\">(x)</tspan>\n\t</tspan>\n</text>\n"); // text -> x="-8" / y="-0.32em"
+
+  var template$4 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate, "\n\t\t").concat(logtemplate, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
+  // Now I need to add in a label saying linear/log
+  // DONE!! Maybe a plus/minus next to the axes to increase the axis limits - instead of dragging the labels.
+  // The changing between the variables is done in the parent, and not in the axis. This is simply because this class only controls it's own node, and there isn't space to show all the options. Therefore the parent must allocate the space for the change of variables.
+  // How to change between the scale interpretations? What should I click? Maybe the exponent text? But then it should always be visible. Let's try that yes. But how to differentiate between clicking on hte text, and editing the text??
+
+  var StaticOrdinalAxis = /*#__PURE__*/function () {
+    // These margins are required to completely fit the scales along with their labels, ticks and domain lines onto the plot.
+    function StaticOrdinalAxis(axis, plotbox) {
+      _classCallCheck(this, StaticOrdinalAxis);
+
+      this._type = "linear";
+      this.ticks = undefined;
+      this.variable = {
+        name: "N",
+        extent: [1, 1]
+      };
+      this.domain = [1, 1];
+      this.supportedtypes = ["linear", "log"];
+      this.margin = {
+        top: 30,
+        right: 30,
+        bottom: 40,
+        left: 40
+      };
+      /* `axis' is a flag that signals whether it should be a vertical or horizontal axis, `svgbbox' allows the axis to be appropriately positioned, and therefore define the plotting area, and `ordinalvariable' is a dbslice ordinal variable which is paired with this axis. */
+
+      var obj = this; // make the axis group.
+
+      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$4);
+      obj.node = obj.d3node.node(); // Get rid of axis by abstracting?
+
+      obj.axis = axis;
+      obj.setplotbox(plotbox); // Add the functionality to the domain change.
+
+      var controls = obj.d3node.select("g.domain-controls");
+      controls.select("text.plus").on("click", function () {
+        obj.plusdomain();
+        obj.update();
+      });
+      controls.select("text.minus").on("click", function () {
+        obj.minusdomain();
+        obj.update();
+      }); // Add teh functionality to toggle the axis type.
+
+      var exponent = obj.d3node.select("g.model-controls");
+      exponent.on("click", function () {
+        obj.incrementtype();
+        obj.update();
+      });
+    } // constructor
+
+
+    _createClass(StaticOrdinalAxis, [{
+      key: "update",
+      value: function update() {
+        var obj = this;
+        obj.position();
+        obj.draw();
+        obj.onupdate();
+      } // update
+      // Dummy function to allow updates on user interactions.
+
+    }, {
+      key: "onupdate",
+      value: function onupdate() {} // onupdate
+      // Drawing of the svg axes.
+
+    }, {
+      key: "position",
+      value: function position() {
+        // If the range changes, then the location of the axes must change also. And with them the exponents should change location.
+        var obj = this; // Position the axis. This will impact all of the following groups that are within the axes group.
+
+        var ax = obj.axis == "y" ? obj.margin.left : 0;
+        var ay = obj.axis == "y" ? 0 : obj.plotbox.y[1] - obj.margin.bottom;
+        obj.d3node.attr("transform", "translate(".concat(ax, ", ").concat(ay, ")")); // Reposition hte exponent.
+
+        var model = obj.d3node.select("g.model-controls");
+        model.attr("text-anchor", obj.axis == "y" ? "start" : "end");
+        var mx = obj.axis == "y" ? 0 + 6 : obj.range[1];
+        var my = obj.axis == "y" ? obj.margin.top + 3 : 0 - 6;
+        model.attr("transform", "translate(".concat(mx, ", ").concat(my, ")")); // Reposition the +/- controls.
+
+        var controls = obj.d3node.select("g.domain-controls");
+        var cx = obj.axis == "y" ? 0 - 5 : obj.range[1] + 10;
+        var cy = obj.axis == "y" ? obj.margin.top - 10 : 0 + 5;
+        controls.attr("transform", "translate(".concat(cx, ", ").concat(cy, ")")); // Reposition hte actual plus/minus.
+
+        var dyPlus = obj.axis == "y" ? 0 : -5;
+        var dxPlus = obj.axis == "y" ? -5 : 0;
+        var dyMinus = obj.axis == "y" ? 0 : 5;
+        var dxMinus = obj.axis == "y" ? 5 : 1.5;
+        controls.select("text.plus").attr("dy", dyPlus);
+        controls.select("text.plus").attr("dx", dxPlus);
+        controls.select("text.minus").attr("dy", dyMinus);
+        controls.select("text.minus").attr("dx", dxMinus); // Position the variable label.
+
+        var labelgroup = obj.d3node.select("g.variable-controls");
+        var label = labelgroup.select("text.label"); // The text should be flush with the axis. To allow easier positioning use the `text-anchor' property.
+
+        label.attr("writing-mode", obj.axis == "y" ? "tb" : "lr");
+        label.text(obj.variable.name ? obj.variable.name : "Variable name");
+        var lx = obj.axis == "y" ? 30 : obj.range[1];
+        var ly = obj.axis == "y" ? -obj.margin.top : 30;
+        var la = obj.axis == "y" ? 180 : 0;
+        labelgroup.attr("transform", "rotate(".concat(la, ") translate(").concat(lx, ", ").concat(ly, ")"));
+      } // position
+
+    }, {
+      key: "draw",
+      value: function draw() {
+        var obj = this;
+        obj.d3node.selectAll("g.model-controls").select("text").attr("fill", obj.exponent > 0 ? "black" : "black").select("tspan.exp").html(obj.exponent); // A different scale is created for drawing to allow specific labels to be created (e.g. for scientific notation with the exponent above the axis.)	
+
+        var d3axisType = obj.axis == "y" ? axisLeft : axisBottom;
+        var d3axis = d3axisType(obj.scale);
+
+        if (obj.ticks) {
+          d3axis.tickValues(obj.ticks);
+        }
+        obj.d3node.select("g.graphic").call(d3axis); // Control the ticks. Mak
+
+        obj.d3node.select("g.graphic").selectAll("text").html(function (d) {
+          return obj.tickformat(d);
+        }); // Switch between the model controls.
+
+        var modelcontrols = obj.d3node.select("g.model-controls");
+        modelcontrols.selectAll("text").attr("display", "none");
+        modelcontrols.select("text." + obj.type).attr("display", "");
+      } // draw
+      // MOVE ALL THESE SWITCHES SOMEWHERE ELSE. MAYBE JUST CREATE A SUPPORTED OBJECT OUTSIDE SO ALL THE SMALL CHANGES CAN BE HANDLED THERE.
+
+    }, {
+      key: "tickformat",
+      value: function tickformat(d) {
+        // By default the tick values are assigned to all tick marks. Just control what appears in hte labels.
+        var obj = this;
+        var label;
+
+        switch (obj.type) {
+          case "log":
+            // Only orders of magnitude. Keep an eye out for number precision when dividing logarithms!
+            var res = Math.round(Math.log(d) / Math.log(obj.scale.base()) * 1e6) / 1e6; // Counting ticks doesn't work, because the ticks don't necessarily begin with the order of magnitude tick.
+
+            label = Number.isInteger(res) ? d : "";
+            break;
+
+          case "linear":
+            // All of them, but adjusted by the common exponent. 
+            label = d / Math.pow(10, obj.exponent);
+            break;
+        } // switch
+
+
+        return label;
+      } // tickformat
+
+    }, {
+      key: "getdrawvalue",
+      value: function getdrawvalue(t) {
+        // Given a task return its coordinate.
+        // This is just implemented for more strict control of wht this axis can do. It's not strictly needed because the scale underneath is not being changed.
+        // Needs the current object as it evaluates the incoming value using the current scale.
+        var obj = this;
+        var v = obj.variable.getvalue(t); // Return only the value of the current axis selection. Also, if the data doesn't have the appropriate attribute, then position hte point off screen instead of returning undefined. Will this break if viewPort is adjusted?
+
+        var dv = obj.scale(v);
+        return dv ? dv : -10;
+      } // getdrawvalue
+      // Getting values required to setup the scales.
+
+    }, {
+      key: "scale",
+      get: function get() {
+        // Computed value based on hte selected scale type.
+        var obj = this;
+        var scale;
+
+        switch (obj.type) {
+          case "log":
+            scale = log();
+            break;
+
+          case "linear":
+          default:
+            scale = linear();
+            break;
+        } // switch
+        // If the domain is below zero always Math.abs it to work with positive values.
+        // The domain of this one  goes below zero... It's because the domain was extended there!! Ah, will this break the zooming and panning below zero?? Probably no? Logs aren't defined for negtive values anyway? So what do I do in those cases? Do I just add a translation in the data? For now just
+        // Deal with the exponent. Will this require accessor functions?? This means that there should be another
+        // I will want the axis configuration to be stored and communicated further to pass into a python module. How will I do that? For that I'll need to evaluate teh data passed into the module. So I should use an evaluator anyway. Where should this evaluator be present? It should be present in the plot. The axis should return the parameters required for the evaluation. But it also needs to return the scale to be used for drawing. Actually, it just needs to present the draw value given some input. So just have that exposed? And a general evaluator that can handle any combination of inputs?
+
+
+        scale.range(obj.range).domain(obj.domain);
+        return scale;
+      } // get scale
+
+    }, {
+      key: "range",
+      get: function get() {
+        // When initialising a new range - e.g. on plot rescaling, the scales need to change
+        var obj = this; // When the axis is made the first tick is translated by the minimum of the range. Therefore the margin is only added when adjusting the `_range`. 
+
+        if (obj.axis == "y") {
+          // The browsers coordinate system runs from top of page to bottom. This is opposite from what we're used to in engineering charts. Reverse the range for hte desired change.
+          var r = [obj.plotbox.y[0] + obj.margin.top, obj.plotbox.y[1] - obj.margin.bottom];
+          return [r[1], r[0]];
+        } else {
+          return [obj.plotbox.x[0] + obj.margin.left, obj.plotbox.x[1] - obj.margin.right];
+        } // if
+
+      } // get range
+
+    }, {
+      key: "setplotbox",
+      value: function setplotbox(plotbox) {
+        // The vertical position of the axis doesn't actually depend on the range. The y-position for the x axis should be communicated from outside. The axis should always get the x and y dimesnion of the svg we're placing it on.
+        this.plotbox = plotbox;
+      } // plotbox
+      // Domain changes
+
+    }, {
+      key: "setdomain",
+      value: function setdomain(domain) {
+        this.domain = domain;
+      } // domain
+
+    }, {
+      key: "plusdomain",
+      value: function plusdomain() {
+        // Extend the domain by one difference between the existing ticks. It's always extended by hte distance between the last two ticks.
+        var obj = this;
+        var currentdomain = obj.domain;
+        var ticks = obj.scale.ticks(); // Calculate the tick difference. If that fails just set the difference to 10% of the domain range.
+
+        var tickdiff = ticks[ticks.length - 1] - ticks[ticks.length - 2];
+        tickdiff = tickdiff ? tickdiff : 0.1(currentdomain[1] - currentdomain[0]); // Set the new domain.
+
+        this.domain = [currentdomain[0], currentdomain[1] + tickdiff];
+      } // plusdomain
+
+    }, {
+      key: "minusdomain",
+      value: function minusdomain() {
+        // Reduce the domain by one difference between the existing ticks. It's always extended by hte distance between the last two ticks.
+        var obj = this;
+        var currentdomain = obj.domain;
+        var ticks = obj.scale.ticks(); // Calculate the tick difference. If that fails just set the difference to 10% of the domain range.
+
+        var tickdiff = ticks[ticks.length - 1] - ticks[ticks.length - 2];
+        tickdiff = tickdiff ? tickdiff : 0.1(currentdomain[1] - currentdomain[0]); // Set the new domain.
+
+        this.domain = [currentdomain[0], currentdomain[1] - tickdiff];
+      } // minusdomain
+      // Creating model variables.
+      // This exponent should be reworked to just return the transformation configuration.
+      // Difference between the tick labels, and the data for evaluation. For the evaluation whatever is displayed on hte axes should be passed to the model. But the exponent is just a cosmetic change.
+      // Can also use the exponent to guess what space we should be viewing the data in? Maybe not. For example erroneous values.
+      // Difference between a log scale transformation and a log scale axis. The log axis still shows the exact same values, whereas the transform will create new values. Do I want to differentiate between the two, or just apply a log transformation if the data is visualised with a log scale? Even if the data is in hte log scale the user may still want to use it as such?
+      // Still connect both - what you see is what you get. But on hte log plot maybe still keep the original labels?? Let's see how it goes.
+      // So if I have an exponent do I change the domain? But the exponent depends on the domain...Create a labelaxis just to draw the labels??
+
+    }, {
+      key: "exponent",
+      get: function get() {
+        var obj = this;
+
+        if (obj.domain.length > 0) {
+          var maxExp = calculateExponent(obj.domain[1]);
+          var minExp = calculateExponent(obj.domain[0]); // Which exponent to return? It has to be a multiple of three - guaranteed by calculateExponent.
+          // -10.000 - 10.000 -> 3
+          // 0 - 10.000 -> 3
+          // 0 - 1.000.000 -> 3 - to minimize string length?
+          // 
+          // If the order of magnitude is a factor of 3 then return the maximum one. e.g. range of 100 - 100.000 go for 3 to reduce teh string length
+
+          return maxExp - minExp >= 3 ? maxExp : minExp;
+        } else {
+          return 0;
+        } // if
+
+      } // exponent
+      // Changing the scale type. Click on the exponent to change the 
+
+    }, {
+      key: "nexttype",
+      value: function nexttype(type) {
+        // Sequence of axis types.
+        var obj = this;
+        var imax = obj.supportedtypes.length - 1;
+        var inext = obj.supportedtypes.indexOf(type) + 1;
+        var i = inext > imax ? inext - imax - 1 : inext;
+        return obj.supportedtypes[i];
+      } // nexttype
+      // Shouldn't really migrate the type of axes from the ordinalAxes to the variable. What if teh variable isn't observable for instance? In that case use an observable attribute of this class.
+
+    }, {
+      key: "incrementtype",
+      value: function incrementtype() {
+        var obj = this;
+        var newtype = obj.nexttype(obj.type); // If the switch is to `log' the domain needs to be changed to be positive. So: don't allow the change to log. If the user wants to use a log transformation on the data they need to first et it in the right range.
+
+        if (newtype == "log") {
+          var extent = obj.variable.extent;
+          var invalidExtent = extent[0] * extent[1] <= 0;
+
+          if (invalidExtent) {
+            // Move to next type.
+            newtype = obj.nexttype(newtype);
+          } // if
+
+        } // if
+        // Set the new type.
+
+
+        obj.type = newtype; // Try to increment it for the variable obj too.
+
+        if (typeof obj.variable.changetransformtype == "function") {
+          obj.variable.changetransformtype(newtype);
+        } // if
+        // Always switch back to the original domain.
+
+
+        if (obj.variable) {
+          obj.setdomain(obj.variable.extent);
+        } // if
+
+      } // incrementtype
+
+    }, {
+      key: "type",
+      get: // type
+      function get() {
+        // Maybe adjust this one so that it gets the type from the variable, if it's available.
+        var obj = this; // Default value.
+
+        var _type = obj._type; // But if the variable is defined, and it has a correctly defined type, then use that one instead. If it's observable this will also update automatically.
+
+        if (obj.variable) {
+          var customtype = obj.variable.transformtype;
+
+          if (obj.supportedtypes.includes(customtype)) {
+            _type = customtype;
+          } // if
+
+        }
+
+        return _type;
+      } // type
+      ,
+      set: function set(newtype) {
+        var obj = this; // The type can be set to a specific value.
+
+        if (obj.supportedtypes.includes(newtype)) {
+          obj._type = newtype;
+        } // if
+
+      }
+    }]);
+
+    return StaticOrdinalAxis;
+  }(); // StaticOrdinalAxis
+
+  /*
+  background: elements for background functionality (e.g. zoom rectangle)
+  data      : primary data representations
+  markup    : non-primary data graphic markups, (e.g. compressor map chics) 
+  x/y-axis  : x/y axis elements
+  exponent  : power exponent (big number labels may overlap otherwise)
+  */
+
+  var template$3 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"markup\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n";
+  /*
+  The histogram inset is a modification of teh two interactive axis inset. Firstly, the y-axis is made to be static. Secondly, the domain increase functionality needs to be ammended to change the number of bins instead of changing the actual domain.
+  */
+
+  var HistogramInset = /*#__PURE__*/function () {
+    function HistogramInset() {
+      _classCallCheck(this, HistogramInset);
+
+      this.width = 400;
+      this.height = 400;
+      var obj = this;
+      obj.node = html2element(template$3); // Make the axis objects, and connect them to the menu selection.
+      // `obj.plotbox' specifies the area of the SVG that the chart should be drawn to.
+      // Variables must be set later.
+
+      obj.y = new StaticOrdinalAxis("y", obj.plotbox);
+      obj.x = new ordinalAxis("x", obj.plotbox);
+      var axisContainer = obj.node.querySelector("g.axes");
+      axisContainer.appendChild(obj.y.node);
+      axisContainer.appendChild(obj.x.node);
+      var menuContainer = obj.node.querySelector("div.variable-select-menus");
+      menuContainer.appendChild(obj.x.menu.node);
+      obj.x.nbins = 10;
+
+      obj.x.plusdomain = function () {
+        obj.x.nbins += 1;
+      }; // plusdomain
+
+
+      obj.x.minusdomain = function () {
+        // Make sure the number of bins is above 0.
+        obj.x.nbins = Math.max(obj.x.nbins - 1, 1);
+      }; // plusdomain
+
+    } // constructor
+
+
+    _createClass(HistogramInset, [{
+      key: "update",
+      value: function update(variables) {
+        var obj = this;
+        obj.x.update(variables);
+        obj.y.update();
+      } // update
+
+    }, {
+      key: "plotbox",
+      get: function get() {
+        // Specify the area of the svg dedicated to the plot. In this case it'll be all of it. The margin determines the amount of whitespace around the plot. This whitespace will NOT include the axis labels etc.
+        var obj = this;
+        var margin = {
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0
+        }; // If the inset was not yet attached the getBoundingClientRect will return an empty rectangle. Instead, have this inset completely control the width and height of hte svg.
+        // let svgrect = obj.node.getBoundingClientRect();
+
+        var plot = {
+          x: [margin.left, obj.width - margin.left - margin.right],
+          y: [margin.top, obj.height - margin.top - margin.bottom]
+        };
+        return plot;
+      } // plotbox
+
+    }, {
+      key: "isConfigured",
+      get: function get() {
+        var obj = this; // At the beginning the plot starts empty.
+
+        return obj.x.variable.name != undefined;
+      } // isConfigured
+
+    }]);
+
+    return HistogramInset;
+  }(); // HistogramInset
+
+  var template$2 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"histogram\"></div>\n</div>\n";
+
+  var histogram = /*#__PURE__*/function (_plotframe) {
+    _inherits(histogram, _plotframe);
+
+    var _super = _createSuper(histogram);
+
+    function histogram(data) {
+      var _this;
+
+      _classCallCheck(this, histogram);
+
+      _this = _super.call(this);
+      _this.width = 400;
+
+      var obj = _assertThisInitialized(_this);
+
+      obj.data = data; // Object to calculate the histgoram.
+
+      obj.histogram = bin();
+      obj.bins = []; // Append the plot backbone.
+
+      var container = obj.node.querySelector("div.card-body");
+      container.appendChild(html2element(template$2)); // Add a histogram inset. When initialising already pass in the card size.
+
+      obj.svgobj = new HistogramInset();
+      container.querySelector("div.histogram").appendChild(obj.svgobj.node);
+
+      obj.svgobj.x.onupdate = function () {
+        obj.updatebins();
+        obj.draw();
+        obj.repaint();
+      }; // function
+
+
+      obj.svgobj.y.onupdate = function () {
+        obj.refresh();
+      }; // function
+      // Change the initial title
+
+
+      obj.node.querySelector("input.card-title").value = "Histogram";
+      return _this;
+    } // constructor
+
+
+    _createClass(histogram, [{
+      key: "update",
+      value: function update() {
+        var obj = this;
+        obj.svgobj.update();
+        obj.refresh();
+      } // update
+
+    }, {
+      key: "updatedata",
+      value: function updatedata() {
+        // Launch if the global data changes -> new variables are needed.
+        var obj = this;
+        var variables = obj.data.variablenames.map(function (name) {
+          return new variableobj({
+            name: name,
+            extent: extent(obj.data.tasks, function (t) {
+              return t.metadata[name];
+            })
+          }); // new variableobj
+        });
+        obj.svgobj.update(variables);
+        obj.draw();
+      } // updatedata  
+
+    }, {
+      key: "updatebins",
+      value: function updatebins() {
+        var obj = this;
+        var x = obj.svgobj.x;
+        var y = obj.svgobj.y;
+        var thresholds = Array(x.nbins + 1).fill().map(function (el, i) {
+          return x.domain[0] * (x.nbins - i) / x.nbins + x.domain[1] * i / x.nbins;
+        });
+        obj.histogram.value(function (d) {
+          return d.metadata[x.variable.name];
+        }).domain(x.domain).thresholds(thresholds); // d3.thresholdFreedmanDiaconis(values, min, max)
+        // All bins should be calculated here, as it onlz depends on the overall data. Subset bins are calculated here to allow ???
+
+        obj.allbins = obj.histogram(obj.data.tasks);
+        obj.bins = obj.histogram(obj.data.subset.value); // The y-axis depends on the bins, so it needs to be updated here.
+
+        y.setdomain([0, max(obj.allbins, function (b) {
+          return b.length;
+        })]);
+        y.ticks = Array(y.domain[1] + 1).fill().map(function (v, i) {
+          return i;
+        });
+        y.draw();
+      } // updatebins
+
+    }, {
+      key: "draw",
+      value: function draw() {
+        var obj = this;
+        obj.makeRects(obj.allbins, "outline", "gainsboro");
+        obj.updateRects("outline");
+        obj.makeRects(obj.bins, "active", "cornflowerblue");
+        obj.refresh();
+      } // draw
+
+    }, {
+      key: "makeRects",
+      value: function makeRects(data, name, color) {
+        var obj = this;
+        var x = obj.svgobj.x.scale;
+        var y = obj.svgobj.y.scale;
+        var rects = select(obj.node).select("g.data").selectAll("rect.".concat(name)).data(data);
+        rects.exit().remove();
+        rects.enter().append("rect").attr("class", name).attr("x", function (b) {
+          return x(b.x0);
+        }).attr("y", function (b) {
+          return y(0);
+        }).attr("width", function (b) {
+          return Math.max(x(b.x1) - x(b.x0) - 1, 0);
+        }).attr("height", function (b) {
+          return 0;
+        }).attr("fill", color);
+      } // makeRects
+
+    }, {
+      key: "updateRects",
+      value: function updateRects(name) {
+        var obj = this;
+
+        if (obj.svgobj.isConfigured) {
+          var x = obj.svgobj.x.scale;
+          var y = obj.svgobj.y.scale;
+          select(obj.node).select("g.data").selectAll("rect.".concat(name)).transition().attr("x", function (b) {
+            return x(b.x0);
+          }).attr("y", function (b) {
+            return y(b.length);
+          }).attr("width", function (b) {
+            return Math.max(x(b.x1) - x(b.x0) - 1, 0);
+          }).attr("height", function (b) {
+            return y(0) - y(b.length);
+          });
+        } // if
+
+      } // updateRects
+
+    }, {
+      key: "refresh",
+      value: function refresh() {
+        var obj = this;
+        obj.bins = obj.histogram(obj.data.subset.value);
+        select(obj.node).select("g.data").selectAll("rect.active").data(obj.bins);
+        obj.updateRects("active");
+      } // refresh
+
+    }, {
+      key: "repaint",
+      value: function repaint() {
+        // Repaint is called as part of the global update, as for the sctterplot it's sufficient to reapply colors when filtering. But for the histogram the underlying data must be recalculated.
+        var obj = this;
+        obj.refresh();
+      } // repaint
+
+    }]);
+
+    return histogram;
+  }(plotframe); // histogram
+
+  /* Extend the histogram to allow filtering using a rectange */
+
+  var filterhistgoram = /*#__PURE__*/function (_histogram) {
+    _inherits(filterhistgoram, _histogram);
+
+    var _super = _createSuper(filterhistgoram);
+
+    function filterhistgoram(data) {
+      var _this;
+
+      _classCallCheck(this, filterhistgoram);
+
+      _this = _super.call(this, data);
+
+      var obj = _assertThisInitialized(_this); // Add functionality to draw a rectangle.
+      // Now add the drawing of the box.
+
+
+      var svg = obj.svgobj.node.querySelector("svg");
+      var g = select(svg).select("g.markup"); // Add in a brush
+
+      obj.brush = new brush(svg, g, "horizontal");
+
+      obj.brush.clear = function () {
+        // Clear the filter
+        obj.data.filterremove(obj.svgobj.x.variable.name);
+      }; // clear
+
+
+      obj.brush.submit = function () {
+        // Apply the filter
+        obj.data.filterapply(obj.svgobj.x.variable.name, obj.calculateInterval());
+      }; // submit
+      // Needs to also trim the filters when navigating away from dimension.
+
+
+      obj.svgobj.x.onupdate = function () {
+        obj.updatebins();
+        obj.draw();
+        obj.repaint();
+        obj.data.filtertrim();
+      }; // function
+      // Subscribe the plot to any changes of the subset.
+
+
+      obj.data.subset.subscribe(function () {
+        obj.repaint();
+      }); // subscribe
+
+      return _this;
+    } // constructor
+
+
+    _createClass(filterhistgoram, [{
+      key: "repaint",
+      value: function repaint() {
+        _get(_getPrototypeOf(filterhistgoram.prototype), "repaint", this).call(this);
+
+        var obj = this;
+        var x = obj.svgobj.x.scale;
+        var xf = obj.data.filters[obj.svgobj.x.variable.name];
+
+        if (xf) {
+          obj.brush.update(x(xf.range[0]), undefined, x(xf.range[1]) - x(xf.range[0]), undefined);
+        } // if
+
+      } // repaint
+
+    }, {
+      key: "calculateInterval",
+      value: function calculateInterval() {
+        // Calculate the intervals having been given two diagonally opposing points. The returned intervals should be in data units.
+        var obj = this;
+        var x = [obj.brush.p0[0], obj.brush.p1[0]];
+        return x.map(function (v) {
+          return obj.svgobj.x.scale.invert(v);
+        }).sort();
+      } // calculateIntervals
+
+    }]);
+
+    return filterhistgoram;
+  }(histogram); // filterhistgoram
 
   var template$1 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"linecontourplot\"></div>\n</div>\n";
   var additional = "\n<input class=\"card-title\" spellcheck=\"false\"  style=\"".concat(css.plotTitle, " color:orange;\" value=\"\">\n");
@@ -6119,6 +9361,12 @@
         tasks: undefined
       };
 
+      _this.accessor = function () {
+        return {
+          points: [[0, 0]]
+        };
+      };
+
       var obj = _assertThisInitialized(_this);
 
       obj.data = data; // Append the plot backbone.
@@ -6211,32 +9459,25 @@
       value: function draw() {
         // This just creates the lines, and removes redundant ones. The updating is done in refresh.
         var obj = this;
+        var lines = select(obj.node).select("g.data").selectAll("path").data(obj.data.subset.value); // First exit.
 
-        if (obj.data.tasks) {
-          var lines = select(obj.node).select("g.data").selectAll("path").data(obj.data.tasks); // First exit.
+        lines.exit().remove(); // Finally add new lines.
 
-          lines.exit().remove(); // Finally add new lines.
-
-          lines.enter().append("path").attr("stroke-width", 2).attr("fill", "none").on("mouseenter", function (e, d) {
-            // Place a label next to the target.
-            // obj.data.current = d;
-            obj.data.setcurrent(d);
-            obj.refresh();
-            obj.data.globalupdate();
-          }).on("mouseout", function (e, d) {
-            // obj.data.current = undefined;
-            obj.data.setcurrent(undefined);
-            obj.refresh();
-            obj.data.globalupdate();
-          }).on("click", function (e, d) {
-            // obj.data.datum = obj.data.datum == d ? undefined : d;
-            obj.data.selecttask(d);
-            obj.refresh();
-            obj.data.globalupdate();
-          });
-          obj.refresh();
-        } // if
-
+        lines.enter().append("path").attr("stroke-width", 2).attr("fill", "none").on("mouseenter", function (e, d) {
+          // Place a label next to the target.
+          // obj.data.current = d;
+          obj.data.setcurrent(d);
+          obj.data.repaint();
+        }).on("mouseout", function (e, d) {
+          // obj.data.current = undefined;
+          obj.data.setcurrent(undefined);
+          obj.data.repaint();
+        }).on("click", function (e, d) {
+          // obj.data.datum = obj.data.datum == d ? undefined : d;
+          obj.data.selecttask(d);
+          obj.data.repaint();
+        });
+        obj.refresh();
       } // draw
 
     }, {
@@ -6276,66 +9517,114 @@
   }(plotframe); // linedistributionplot
 
   // SCATTERPLOT, quasi-CONTOURPLOT (really a lineplot), LINEPLOT
+  // First add in the collapsible frames, and their toggle buttons.
 
-  var container = document.getElementById("plotcontainer");
-  var plots = []; // Instantiate the data.
+  CollapsibleFrame.AddStyle();
+  var filtering = new CollapsibleFrame("Design");
+  var details = new CollapsibleFrame("Flow");
+  var header = document.getElementById("header");
+  var body = document.getElementById("plotcontainer");
+  var coordinate = [filtering, details];
+  coordinate.forEach(function (frm) {
+    header.appendChild(frm.button);
+    body.appendChild(frm.folder);
+
+    frm.button.onclick = function (e) {
+      coordinate.forEach(function (cfrm) {
+        return cfrm.update(frm == cfrm);
+      });
+    }; // function
+
+  }); // forEach
+  // On window change the currentlz active folder should be activated again to extend it.
+
+  window.onresize = function () {
+    coordinate.forEach(function (cfrm) {
+      return cfrm.update(cfrm.active);
+    });
+  }; // onresize
+  // How do I subscribe the regular plots to just the subset data? Do I just hardcode it so? Or do I subscribe them to it also?
+  // Instantiate the data.
+
 
   var data = new dataStorage();
+  console.log(data); // Data storage applies the filtering also, and precomputes a subset. Whenever the subset changes the plots should repaint, but also any header titles should adjust.
 
-  data.globalupdate = function update() {
-    plots.forEach(function (p) {
-      p.repaint();
-    }); // forEach
-  }; // update
+  data.subset.subscribe(function () {
+    filtering.label("(".concat(data.tasks.length, ")"));
+    details.label("(".concat(data.subset.value.length, ")"));
+  }); // subscribe
+  // PLOTS
 
+  function addPlot(p, folder) {
+    folder.appendChild(p.node);
+    p.update();
+    data.plots.push(p);
+  } // addPlot
+  // FILTERING PLOTS.
+  // Add a scatterplot as a filtering plot prototype.
+  // Why do the filtering plots need to be available to filtering?
+
+
+  var fsp = new filterscatterplot(data);
+  addPlot(fsp, filtering.folder);
+  var fh = new filterhistgoram(data);
+  addPlot(fh, filtering.folder); // FLOW DETAIL PLOTS:
 
   var sp = new scatterplot(data);
-  container.appendChild(sp.node);
-  sp.update();
-  plots.push(sp);
+  addPlot(sp, details.folder);
+  data.subset.subscribe(function () {
+    sp.draw();
+  });
   var lc = new linecontourplot(data);
-  container.appendChild(lc.node);
-  lc.update();
-  plots.push(lc);
+  addPlot(lc, details.folder);
+  data.subset.subscribe(function () {
+    lc.draw();
+  });
   var lp_mach = new linedistributionplot(data);
-  container.appendChild(lp_mach.node);
-  lp_mach.update();
-  plots.push(lp_mach);
+  addPlot(lp_mach, details.folder);
+  data.subset.subscribe(function () {
+    lp_mach.draw();
+  });
   var lp_camber = new linedistributionplot(data);
-  container.appendChild(lp_camber.node);
-  lp_camber.update();
-  plots.push(lp_camber);
+  addPlot(lp_camber, details.folder);
+  data.subset.subscribe(function () {
+    lp_camber.draw();
+  });
   var lp_theta = new linedistributionplot(data);
-  container.appendChild(lp_theta.node);
-  lp_theta.update();
-  plots.push(lp_theta); // ADD DRAG AND DROP FOR DATA
+  addPlot(lp_theta, details.folder);
+  data.subset.subscribe(function () {
+    lp_theta.draw();
+  }); // ADD DRAG AND DROP FOR DATA
 
   var dataLoader = new dragDropHandler();
 
   dataLoader.ondragdropped = function (loadeddata) {
     // This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
-    data.addtasks(loadeddata);
-    console.log("Current number of tasks = ".concat(data.tasks.length)); // Load the data in and assign the series.
+    data.add(loadeddata); // Filtering plot
+
+    fsp.updatedata();
+    fh.updatedata(); // Load the data in and assign the series.
 
     sp.updatedata();
     lc.updatedata(data.contours[0]);
     lp_mach.updatedata(data.distributions[0]);
     lp_camber.updatedata(data.distributions[1]);
     lp_theta.updatedata(data.distributions[2]);
-    data.globalupdate();
   }; // ondragdropped
   // DRAGGING AND DROPPING THE DATA IS A DEVELOPMENT FEATURE.
 
 
-  var dragDropArea = document.getElementsByTagName("body")[0];
-
-  dragDropArea.ondrop = function (ev) {
+  document.body.ondrop = function (ev) {
     dataLoader.ondrop(ev);
   };
 
-  dragDropArea.ondragover = function (ev) {
+  document.body.ondragover = function (ev) {
     dataLoader.ondragover(ev);
-  }; // Dev test dataset.
+  }; // Turn the details on by default. At the end so that the content has some height.
+
+
+  filtering.update(true); // Dev test dataset.
   // dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
 
 }());

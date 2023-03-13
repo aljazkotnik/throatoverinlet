@@ -31,6 +31,10 @@ export default class linedistributionplot extends plotframe{
 		tasks: undefined
 	}
 	
+	
+	accessor = function(){return {points: [[0,0]]}}
+	
+	
 	constructor(data){
 		super();
 		let obj = this;
@@ -129,44 +133,41 @@ export default class linedistributionplot extends plotframe{
 		// This just creates the lines, and removes redundant ones. The updating is done in refresh.
 		let obj = this;
 		
-		if(obj.data.tasks){
-			let lines = d3.select(obj.node)
-			  .select("g.data")
-			  .selectAll("path")
-			  .data( obj.data.tasks )
-			  
-			// First exit.
-			lines.exit().remove();
 
-			// Finally add new lines.
-			lines.enter()
-			  .append("path")
-				.attr("stroke-width", 2)
-				.attr("fill", "none")
-				.on("mouseenter", (e,d)=>{
-					// Place a label next to the target.
-					// obj.data.current = d;
-					obj.data.setcurrent(d);
-					obj.refresh();
-					obj.data.globalupdate();
-				})
-				.on("mouseout", (e,d)=>{
-					// obj.data.current = undefined;
-					obj.data.setcurrent(undefined);
-					obj.refresh();
-					obj.data.globalupdate();
-				})
-				.on("click", (e,d)=>{
-					// obj.data.datum = obj.data.datum == d ? undefined : d;
-					obj.data.selecttask(d);
-					obj.refresh();
-					obj.data.globalupdate();
-				})
+		let lines = d3.select(obj.node)
+		  .select("g.data")
+		  .selectAll("path")
+		  .data( obj.data.subset.value )
+		  
+		// First exit.
+		lines.exit().remove();
 
-			
+		// Finally add new lines.
+		lines.enter()
+		  .append("path")
+			.attr("stroke-width", 2)
+			.attr("fill", "none")
+			.on("mouseenter", (e,d)=>{
+				// Place a label next to the target.
+				// obj.data.current = d;
+				obj.data.setcurrent(d);
+				obj.data.repaint();
+			})
+			.on("mouseout", (e,d)=>{
+				// obj.data.current = undefined;
+				obj.data.setcurrent(undefined);
+				obj.data.repaint();
+			})
+			.on("click", (e,d)=>{
+				// obj.data.datum = obj.data.datum == d ? undefined : d;
+				obj.data.selecttask(d);
+				obj.data.repaint();
+			})
 
-			obj.refresh();
-		} // if
+		
+
+		obj.refresh();
+	
 	} // draw
 	
 	

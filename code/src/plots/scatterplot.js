@@ -26,13 +26,6 @@ let template = `
 export default class scatterplot extends plotframe{
 	width = 400
 	
-	// Gets replaced by the actual data object.
-	data = {
-		current: undefined,
-		datum: undefined,
-		tasks: undefined
-	}
-	
 	constructor(data){
 		super();
 		let obj = this;
@@ -52,12 +45,12 @@ export default class scatterplot extends plotframe{
 		
 		
 				// Change the initial title
-		obj.node.querySelector("input.card-title").value = "Metadata";
+		obj.node.querySelector("input.card-title").value = "Scatterplot";
 
 
 	} // constructor
 	
-	update(tasks){
+	update(){
 		// Update this plot.
 		let obj = this;
 		
@@ -70,19 +63,13 @@ export default class scatterplot extends plotframe{
 	updatedata(){
 		let obj = this;
 		
-		let variables;
-		if(obj.data.tasks){
-			
-			// `dr' and `name' are the only allowed strings. dr is the filepath to the original data on Demetrios' machine.
-			variables = Object.getOwnPropertyNames( obj.data.tasks[0].metadata )
-			  .filter(name=>!["dr", "name"].includes(name))
-			  .map(name=>{
-				  return new variableobj( {
-					  name: name,
-					  extent: d3.extent(obj.data.tasks, t=>t.metadata[name])
-				  } )// new variableobj
-			  });
-		} // if
+		let variables = obj.data.variablenames
+		  .map(name=>{
+			  return new variableobj( {
+				  name: name,
+				  extent: d3.extent(obj.data.tasks, t=>t.metadata[name])
+			  } )// new variableobj
+		  });
 		
 		obj.svgobj.update( variables );
 		obj.draw();
@@ -93,8 +80,7 @@ export default class scatterplot extends plotframe{
 	getcolor(d, defaultcolor){
 		let obj = this;
 		
-		// If a current is prescribed, then any other ones should be gray.
-		// If a current is prescribed
+		// Just add in a condition that if the point is outside of the filter it should be gainsboro.
 		
 		let c = obj.data.current ? obj.data.current==d ? defaultcolor : "gainsboro" : defaultcolor
 		c = obj.data.datum == d ? "orange" : c
@@ -103,50 +89,45 @@ export default class scatterplot extends plotframe{
 	} // getcolor
 
 
+	// Create teh actual SVG elements.
 	draw(){
 		// config:  data, gclass, color, showline.
 		let obj = this;
 		
+			
+		let circles = d3.select(obj.node)
+		  .select("g.data")
+		  .selectAll("circle")
+		  .data( obj.data.subset.value )
 		
-		if(obj.data.tasks){
-			
-			let circles = d3.select(obj.node)
-			  .select("g.data")
-			  .selectAll("circle")
-			  .data( obj.data.tasks )
-			
-			// First exit.
-			circles.exit().remove();
+		// First exit.
+		circles.exit().remove();
 
-			// Finally add new circles.
-			circles.enter()
-			  .append("circle")
-				.attr("r", 5)
-				.attr("cx", -10)
-				.attr("cy", -10)
-				.on("mouseenter", (e,d)=>{
-					// obj.data.current = d;
-					obj.data.setcurrent(d);
-					obj.refresh();
-					obj.data.globalupdate();
-				})
-				.on("mouseout", (e,d)=>{
-					// obj.data.current = undefined;
-					obj.data.setcurrent(undefined);
-					obj.refresh();
-					obj.data.globalupdate();
-					
-				})
-				.on("click", (e,d)=>{
-					// obj.data.datum = obj.data.datum == d ? undefined : d;
-					obj.data.selecttask(d);
-					obj.refresh();
-					obj.data.globalupdate();
-				})
-			
-			obj.refresh();
+		// Finally add new circles.
+		circles.enter()
+		  .append("circle")
+			.attr("r", 5)
+			.attr("cx", -10)
+			.attr("cy", -10)
+			.on("mouseenter", (e,d)=>{
+				// obj.data.current = d;
+				obj.data.setcurrent(d);
+				obj.data.repaint();
+			})
+			.on("mouseout", (e,d)=>{
+				// obj.data.current = undefined;
+				obj.data.setcurrent(undefined);
+				obj.data.repaint();
+				
+			})
+			.on("click", (e,d)=>{
+				// obj.data.datum = obj.data.datum == d ? undefined : d;
+				obj.data.selecttask(d);
+				obj.data.repaint();
+			})
 		
-		} // if
+		obj.refresh();
+	
 	} // draw
 	
 	
@@ -174,6 +155,7 @@ export default class scatterplot extends plotframe{
 	} // repaint
 	
 	
+	// Reposition and repaint the circles.
 	refresh(){
 		let obj = this;
 		
