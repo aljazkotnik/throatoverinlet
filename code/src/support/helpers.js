@@ -33,3 +33,30 @@ export function unique(d){
 	return d.filter( onlyUnique )
 
 } // unique
+
+
+
+
+
+export class ScaleLinear {
+	
+  range = [0,1]
+  domain = [0,1]
+	
+  constructor(){
+    let obj = this;
+  } // constructor
+	
+	
+  val2px(v){
+	let obj = this;
+	return (v - obj.domain[0]) / (obj.domain[1]-obj.domain[0]) * (obj.range[1]-obj.range[0]) + obj.range[0]
+  } // val2px
+	
+  px2val(v){
+	let obj = this;
+	return (v - obj.range[0]) / (obj.range[1]-obj.range[0]) * (obj.domain[1]-obj.domain[0]) + obj.domain[0]
+  } // val2px
+	
+	
+} // ScaleLinear

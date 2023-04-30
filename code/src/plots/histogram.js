@@ -106,7 +106,7 @@ export default class histogram extends plotframe{
 	
 	// The y-axis depends on the bins, so it needs to be updated here.
 	y.setdomain([ 0, d3.max(obj.allbins, b=>b.length) ]);
-	y.ticks = Array(y.domain[1]+1).fill().map((v,i)=>i);
+	// y.ticks = Array(y.domain[1]+1).fill().map((v,i)=>i); // For bins with 100 items this creates 100 labels.
 	y.draw();
 	
   } // updatebins

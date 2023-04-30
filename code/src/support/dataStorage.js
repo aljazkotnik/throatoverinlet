@@ -18,9 +18,9 @@ export default class dataStorage{
   
   // Detail plot accessors.
   distributions = [
-	  {name: "mach", extent: [], accessor: function(d){ return d.distribution["mach"]} },
-	  {name: "camber", extent: [], accessor: function(d){ return d.distribution["camber"]} },
-	  {name: "theta", extent: [], accessor: function(d){ return d.distribution["theta"]} }
+	  {name: "mach", extent: [], accessor: function(d){ return d.distribution["mach"] } },
+	  {name: "camber", extent: [], accessor: function(d){ return d.distribution["camber"] } },
+	  {name: "theta", extent: [], accessor: function(d){ return d.distribution["theta"] } }
   ]
   
   contours = [
@@ -62,10 +62,13 @@ export default class dataStorage{
 	  
 	// Check which filters are still active. This should be only for plots that support filtering though...
 	let plotvariables = obj.plots.reduce(function(acc,p){
-		let xname = p.svgobj.x.variable.name;
-		let yname = p.svgobj.y.variable.name;
-		
-		return acc.concat([xname,yname].filter(n=>n))
+		// The icon plot does not have variables on axes, therefore no svgobj.
+		if(p.svgobj){
+			let xname = p.svgobj.x.variable.name;
+			let yname = p.svgobj.y.variable.name;
+			acc = acc.concat([xname,yname].filter(n=>n))
+		} // if
+		return acc
 	},[]) // reduce
 	
 	
@@ -311,6 +314,12 @@ function reformatContourData(tasks){
 		let flow_lines = passage0.concat(passage1);
 		
 		flow_lines.forEach(line=>{line.color = "cornflowerblue";});
+		flow_lines.filter(line=>line.level==1).forEach(line=>{
+		  // line.color = "seagreen";
+		  line.lineWidth = 2;
+		});
+		
+		
 		let custom_lines = [
 			{level: "aerofoil", points: t.contour.xrt, color: "black"},
 			{level: "aerofoil", points: t.contour.xrt_neg_pitch, color: "black"},
@@ -318,7 +327,7 @@ function reformatContourData(tasks){
 			
 			{level: "throat_bl", points: t.contour.xrt_throat_bl, color: "magenta"},
 			{level: "stag_line", points: t.contour.xrt_stag_line, color: "gray"},
-			{level: "bl", points: t.contour.bl, color: "gray"}
+			{level: "bl", points: t.contour.bl, color: "gray"},
 		];
 
 		

@@ -132,6 +132,39 @@
     return _get(target, property, receiver || target);
   }
 
+  function _toConsumableArray(arr) {
+    return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread();
+  }
+
+  function _arrayWithoutHoles(arr) {
+    if (Array.isArray(arr)) return _arrayLikeToArray(arr);
+  }
+
+  function _iterableToArray(iter) {
+    if (typeof Symbol !== "undefined" && iter[Symbol.iterator] != null || iter["@@iterator"] != null) return Array.from(iter);
+  }
+
+  function _unsupportedIterableToArray(o, minLen) {
+    if (!o) return;
+    if (typeof o === "string") return _arrayLikeToArray(o, minLen);
+    var n = Object.prototype.toString.call(o).slice(8, -1);
+    if (n === "Object" && o.constructor) n = o.constructor.name;
+    if (n === "Map" || n === "Set") return Array.from(o);
+    if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
+  }
+
+  function _arrayLikeToArray(arr, len) {
+    if (len == null || len > arr.length) len = arr.length;
+
+    for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
+
+    return arr2;
+  }
+
+  function _nonIterableSpread() {
+    throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+  }
+
   var dragDropHandler = /*#__PURE__*/function () {
     function dragDropHandler() {
       _classCallCheck(this, dragDropHandler);
@@ -2112,6 +2145,12 @@
     return template.content.firstChild;
   } // html2element
 
+  function svg2element(svg) {
+    var g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.innerHTML = svg.trim();
+    return g.firstChild;
+  } // svg2element
+
   function calculateExponent(val) {
     // calculate the exponent for the scientific notation.
     var exp = 0;
@@ -2134,6 +2173,34 @@
 
     return d.filter(onlyUnique);
   } // unique
+
+  var ScaleLinear = /*#__PURE__*/function () {
+    function ScaleLinear() {
+      _classCallCheck(this, ScaleLinear);
+
+      this.range = [0, 1];
+      this.domain = [0, 1];
+    } // constructor
+
+
+    _createClass(ScaleLinear, [{
+      key: "val2px",
+      value: function val2px(v) {
+        var obj = this;
+        return (v - obj.domain[0]) / (obj.domain[1] - obj.domain[0]) * (obj.range[1] - obj.range[0]) + obj.range[0];
+      } // val2px
+
+    }, {
+      key: "px2val",
+      value: function px2val(v) {
+        var obj = this;
+        return (v - obj.range[0]) / (obj.range[1] - obj.range[0]) * (obj.domain[1] - obj.domain[0]) + obj.domain[0];
+      } // val2px
+
+    }]);
+
+    return ScaleLinear;
+  }(); // ScaleLinear
 
   var ObservableVariable = /*#__PURE__*/function () {
     function ObservableVariable(initialvalue) {
@@ -2251,11 +2318,17 @@
         var obj = this; // Check which filters are still active. This should be only for plots that support filtering though...
 
         var plotvariables = obj.plots.reduce(function (acc, p) {
-          var xname = p.svgobj.x.variable.name;
-          var yname = p.svgobj.y.variable.name;
-          return acc.concat([xname, yname].filter(function (n) {
-            return n;
-          }));
+          // The icon plot does not have variables on axes, therefore no svgobj.
+          if (p.svgobj) {
+            var xname = p.svgobj.x.variable.name;
+            var yname = p.svgobj.y.variable.name;
+            acc = acc.concat([xname, yname].filter(function (n) {
+              return n;
+            }));
+          } // if
+
+
+          return acc;
         }, []); // reduce
 
         var admissiblefiltervariables = unique(plotvariables); // Now go through the dimensions and delete anz dimensions that are no longer needed. These are dimensions that do not appear as plot variables.
@@ -2499,6 +2572,12 @@
       var flow_lines = passage0.concat(passage1);
       flow_lines.forEach(function (line) {
         line.color = "cornflowerblue";
+      });
+      flow_lines.filter(function (line) {
+        return line.level == 1;
+      }).forEach(function (line) {
+        // line.color = "seagreen";
+        line.lineWidth = 2;
       });
       var custom_lines = [{
         level: "aerofoil",
@@ -7324,20 +7403,20 @@
     btnDanger: "\n\t  background-color: crimson;\n\t  color: white;\n\t  float: right;\n    "
   }; // css
 
-  var template$9 = "\n\t<div style=\"".concat(css.card, "\">\n\t\t<div class=\"card-header\" style=\"").concat(css.cardHeader, "\">\n\t\t\t<input class=\"card-title\" spellcheck=\"false\"  style=\"").concat(css.plotTitle, "\" value=\"New Plot\">\n\t\t</div>\n\t\t\n\t\t<div class=\"card-body\">\n\t\t\n\t\t</div>\n\t</div>\n"); // template
+  var template$a = "\n\t<div style=\"".concat(css.card, "\">\n\t\t<div class=\"card-header\" style=\"").concat(css.cardHeader, "\">\n\t\t\t<input class=\"card-title\" spellcheck=\"false\"  style=\"").concat(css.plotTitle, "\" value=\"New Plot\">\n\t\t</div>\n\t\t\n\t\t<div class=\"card-body\">\n\t\t\n\t\t</div>\n\t</div>\n"); // template
 
   var plotframe = function plotframe() {
     _classCallCheck(this, plotframe);
 
     var obj = this;
-    obj.node = html2element(template$9);
+    obj.node = html2element(template$a);
   } // constructor	
   ;
    // plotframe
 
   var variablemenustyle = "\n  background-color: white;\n  border: 2px solid black;\n  border-radius: 5px;\n  display: none; \n  position: absolute;\n  max-height: 120px;\n  overflow-y: auto;\n";
   var ulstyle = "\n  list-style-type: none;\n  font-size: 10px;\n  font-weight: bold;\n  padding-left: 4px;\n  padding-right: 4px;\n";
-  var template$8 = "\n<div class=\"variable-select-menu\" style=\"".concat(variablemenustyle, "\">\n  <ul style=\"").concat(ulstyle, "\">\n  </ul>\n</div>\n"); // Differentite between an x and a y one.
+  var template$9 = "\n<div class=\"variable-select-menu\" style=\"".concat(variablemenustyle, "\">\n  <ul style=\"").concat(ulstyle, "\">\n  </ul>\n</div>\n"); // Differentite between an x and a y one.
 
   var divSelectMenu = /*#__PURE__*/function () {
     function divSelectMenu(axis) {
@@ -7349,7 +7428,7 @@
         extent: [1, 1]
       };
       var obj = this;
-      obj.node = html2element(template$8);
+      obj.node = html2element(template$9);
 
       obj.node.onclick = function (event) {
         return event.stopPropagation();
@@ -7422,7 +7501,7 @@
   var exponenttemplate$1 = "\n<text class=\"linear\" ".concat(textattributes$1, ">\n\t<tspan>\n\t  x10\n\t  <tspan class=\"exp\" dy=\"-5\"></tspan>\n\t</tspan>\n</text>\n");
   var logtemplate$1 = "\n<text class=\"log\" ".concat(textattributes$1, " display=\"none\">\n\t<tspan>\n\t  log\n\t  <tspan class=\"base\" dy=\"5\">10</tspan>\n\t  <tspan class=\"eval\" dy=\"-5\">(x)</tspan>\n\t</tspan>\n</text>\n"); // text -> x="-8" / y="-0.32em"
 
-  var template$7 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate$1, "\n\t\t").concat(logtemplate$1, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes$1, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes$1, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes$1, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
+  var template$8 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate$1, "\n\t\t").concat(logtemplate$1, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes$1, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes$1, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes$1, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
   // Now I need to add in a label saying linear/log
   // DONE!! Maybe a plus/minus next to the axes to increase the axis limits - instead of dragging the labels.
   // The changing between the variables is done in the parent, and not in the axis. This is simply because this class only controls it's own node, and there isn't space to show all the options. Therefore the parent must allocate the space for the change of variables.
@@ -7450,7 +7529,7 @@
 
       var obj = this; // make the axis group.
 
-      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$7);
+      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$8);
       obj.node = obj.d3node.node(); // Get rid of axis by abstracting?
 
       obj.axis = axis;
@@ -7840,7 +7919,7 @@
   exponent  : power exponent (big number labels may overlap otherwise)
   */
 
-  var template$6 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<rect class=\"zoom-area\" fill=\"rgb(255, 255, 255)\" width=\"400\" height=\"400\"></rect>\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"markup\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n"; // The axis scale needs to have access to the data and to the svg dimensions. Actually not access to the data, but access to the data extent. This has been solved by adding calculated extents to the variable objects.
+  var template$7 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<rect class=\"zoom-area\" fill=\"rgb(255, 255, 255)\" width=\"400\" height=\"400\"></rect>\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"markup\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n"; // The axis scale needs to have access to the data and to the svg dimensions. Actually not access to the data, but access to the data extent. This has been solved by adding calculated extents to the variable objects.
   // It's best to just pass all the variables to the axis, and let it handle everything connected to it. 
   // This class is a template for two interactive axes svg based plotting.
   // Handle the variable changing here!!!
@@ -7854,7 +7933,7 @@
       this.width = 400;
       this.height = 400;
       var obj = this;
-      obj.node = html2element(template$6); // Make the axis objects, and connect them to the menu selection.
+      obj.node = html2element(template$7); // Make the axis objects, and connect them to the menu selection.
       // `obj.plotbox' specifies the area of the SVG that the chart should be drawn to.
       // Variables must be set later.
 
@@ -8083,7 +8162,7 @@
     return variableobj;
   }(); // variableobj
 
-  var template$5 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"scatterplot\"></div>\n</div>\n";
+  var template$6 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"scatterplot\"></div>\n</div>\n";
 
   var scatterplot = /*#__PURE__*/function (_plotframe) {
     _inherits(scatterplot, _plotframe);
@@ -8103,7 +8182,7 @@
       obj.data = data; // Append the plot backbone.
 
       var container = obj.node.querySelector("div.card-body");
-      container.appendChild(html2element(template$5)); // Add a scatterplot inset. When initialising already pass in the card size.
+      container.appendChild(html2element(template$6)); // Add a scatterplot inset. When initialising already pass in the card size.
 
       obj.svgobj = new twoInteractiveAxesInset([]);
       container.querySelector("div.scatterplot").appendChild(obj.svgobj.node);
@@ -8442,7 +8521,7 @@
   var exponenttemplate = "\n<text class=\"linear\" ".concat(textattributes, ">\n\t<tspan>\n\t  x10\n\t  <tspan class=\"exp\" dy=\"-5\"></tspan>\n\t</tspan>\n</text>\n");
   var logtemplate = "\n<text class=\"log\" ".concat(textattributes, " display=\"none\">\n\t<tspan>\n\t  log\n\t  <tspan class=\"base\" dy=\"5\">10</tspan>\n\t  <tspan class=\"eval\" dy=\"-5\">(x)</tspan>\n\t</tspan>\n</text>\n"); // text -> x="-8" / y="-0.32em"
 
-  var template$4 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate, "\n\t\t").concat(logtemplate, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
+  var template$5 = "\n\t<g class=\"graphic\"></g>\n\t\n\t<g class=\"model-controls\" style=\"cursor: pointer;\">\n\t\t".concat(exponenttemplate, "\n\t\t").concat(logtemplate, "\n\t</g>\n\t<g class=\"domain-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"plus hover-highlight\" ").concat(textattributes, ">+</text>\n\t\t<text class=\"minus hover-highlight\" ").concat(textattributes, ">-</text>\n\t</g>\n\t<g class=\"variable-controls\" style=\"cursor: pointer;\">\n\t\t<text class=\"label hover-highlight\" ").concat(textattributes, " text-anchor=\"end\">Variable name</text>\n\t</g>\n"); // The exponent should be replaced with the logarithmic controls if the axis switches from linear to log.
   // Now I need to add in a label saying linear/log
   // DONE!! Maybe a plus/minus next to the axes to increase the axis limits - instead of dragging the labels.
   // The changing between the variables is done in the parent, and not in the axis. This is simply because this class only controls it's own node, and there isn't space to show all the options. Therefore the parent must allocate the space for the change of variables.
@@ -8471,7 +8550,7 @@
 
       var obj = this; // make the axis group.
 
-      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$4);
+      obj.d3node = create$1("svg:g").attr("class", "".concat(axis, "-axis")).html(template$5);
       obj.node = obj.d3node.node(); // Get rid of axis by abstracting?
 
       obj.axis = axis;
@@ -8815,7 +8894,7 @@
   exponent  : power exponent (big number labels may overlap otherwise)
   */
 
-  var template$3 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"markup\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n";
+  var template$4 = "\n<div style=\"position: relative;\">\n\t<svg class=\"plot-area\" width=\"400\" height=\"400\">\n\t\t\n\t\t<g class=\"background\">\n\t\t\t\n\t\t\t<g class=\"tooltip-anchor\">\n\t\t\t\t<circle class=\"anchor-point\" r=\"1\" opacity=\"0\"></circle>\n\t\t\t</g>\n\t\t</g>\n\t\t\n\t\t\n\t\t<g class=\"datum\"></g>\n\t\t<g class=\"data\"></g>\n\t\t<g class=\"markup\"></g>\n\t\t<g class=\"axes\"></g>\n\t\t\n\t\t\n\t</svg>\n\t\n\t<div class=\"variable-select-menus\"></div>\n\t\n</div>\n";
   /*
   The histogram inset is a modification of teh two interactive axis inset. Firstly, the y-axis is made to be static. Secondly, the domain increase functionality needs to be ammended to change the number of bins instead of changing the actual domain.
   */
@@ -8827,7 +8906,7 @@
       this.width = 400;
       this.height = 400;
       var obj = this;
-      obj.node = html2element(template$3); // Make the axis objects, and connect them to the menu selection.
+      obj.node = html2element(template$4); // Make the axis objects, and connect them to the menu selection.
       // `obj.plotbox' specifies the area of the SVG that the chart should be drawn to.
       // Variables must be set later.
 
@@ -8894,7 +8973,7 @@
     return HistogramInset;
   }(); // HistogramInset
 
-  var template$2 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"histogram\"></div>\n</div>\n";
+  var template$3 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"histogram\"></div>\n</div>\n";
 
   var histogram = /*#__PURE__*/function (_plotframe) {
     _inherits(histogram, _plotframe);
@@ -8917,7 +8996,7 @@
       obj.bins = []; // Append the plot backbone.
 
       var container = obj.node.querySelector("div.card-body");
-      container.appendChild(html2element(template$2)); // Add a histogram inset. When initialising already pass in the card size.
+      container.appendChild(html2element(template$3)); // Add a histogram inset. When initialising already pass in the card size.
 
       obj.svgobj = new HistogramInset();
       container.querySelector("div.histogram").appendChild(obj.svgobj.node);
@@ -8984,10 +9063,8 @@
 
         y.setdomain([0, max(obj.allbins, function (b) {
           return b.length;
-        })]);
-        y.ticks = Array(y.domain[1] + 1).fill().map(function (v, i) {
-          return i;
-        });
+        })]); // y.ticks = Array(y.domain[1]+1).fill().map((v,i)=>i); // For bins with 100 items this creates 100 labels.
+
         y.draw();
       } // updatebins
 
@@ -9147,7 +9224,7 @@
     return filterhistgoram;
   }(histogram); // filterhistgoram
 
-  var template$1 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"linecontourplot\"></div>\n</div>\n";
+  var template$2 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"linecontourplot\"></div>\n</div>\n";
   var additional = "\n<input class=\"card-title\" spellcheck=\"false\"  style=\"".concat(css.plotTitle, " color:orange;\" value=\"\">\n");
 
   var linecontourplot = /*#__PURE__*/function (_plotframe) {
@@ -9181,7 +9258,7 @@
       header.appendChild(html2element(additional)); // Append the plot backbone.
 
       var container = obj.node.querySelector("div.card-body");
-      container.appendChild(html2element(template$1)); // Add a linecontourplot inset. When initialising already pass in the card size.
+      container.appendChild(html2element(template$2)); // Add a linecontourplot inset. When initialising already pass in the card size.
 
       obj.svgobj = new twoInteractiveAxesInset([]);
       container.querySelector("div.linecontourplot").appendChild(obj.svgobj.node);
@@ -9286,9 +9363,13 @@
 
           lines.attr("d", function (d) {
             return obj.getpath(d);
-          }).attr("stroke", coloraccessor); // Finally add new lines.
+          }).attr("stroke", coloraccessor).attr("stroke-width", function (d) {
+            return d.lineWidth ? d.lineWidth : 1;
+          }); // Finally add new lines.
 
-          lines.enter().append("path").attr("stroke-width", 1).attr("stroke", coloraccessor).attr("fill", "none").attr("d", function (d) {
+          lines.enter().append("path").attr("stroke-width", function (d) {
+            return d.lineWidth ? d.lineWidth : 1;
+          }).attr("stroke", coloraccessor).attr("fill", "none").attr("d", function (d) {
             return obj.getpath(d);
           }).on("mouseenter", function (e, d) {
             e.target.setAttribute("stroke-width", 2);
@@ -9341,7 +9422,7 @@
     return linecontourplot;
   }(plotframe); // linecontourplot
 
-  var template = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"linedistributionplot\"></div>\n</div>\n";
+  var template$1 = "\n<div style=\"width: 400px; background-color: white;\">\n\t<div class=\"linedistributionplot\"></div>\n</div>\n";
 
   var linedistributionplot = /*#__PURE__*/function (_plotframe) {
     _inherits(linedistributionplot, _plotframe);
@@ -9372,7 +9453,7 @@
       obj.data = data; // Append the plot backbone.
 
       var container = obj.node.querySelector("div.card-body");
-      container.appendChild(html2element(template)); // Add a linedistributionplot inset. When initialising already pass in the card size.
+      container.appendChild(html2element(template$1)); // Add a linedistributionplot inset. When initialising already pass in the card size.
 
       obj.svgobj = new twoInteractiveAxesInset([]);
       container.querySelector("div.linedistributionplot").appendChild(obj.svgobj.node);
@@ -9516,15 +9597,537 @@
     return linedistributionplot;
   }(plotframe); // linedistributionplot
 
+  /*Should this be a separate plot maybe? And a plot that allows interactions? So it shows all the triangles, and all the radial contractions, and it allows the user to select using it? */
+
+  var TriangleIconGroup = /*#__PURE__*/function () {
+    // This class should also display two designs at teh same time, using hte same color scheme (or similar) as the contour plot.
+    // This is just an icon subplot, and it may be hosted on hte same svg with other subplots. Therefore it is drawn into a prescribed box.
+    function TriangleIconGroup(data, accessor, xscale, yscale) {
+      _classCallCheck(this, TriangleIconGroup);
+
+      this.triangles = [];
+      var obj = this;
+      obj.data = data;
+      obj.accessor = accessor; // Calculate the scale to use for drawing.
+
+      obj.xscale = xscale;
+      obj.yscale = yscale; // The translate is required to allow the plot to be drawn with a single scale.
+
+      obj.node = svg2element("<g></g>");
+    } // constructor
+
+
+    _createClass(TriangleIconGroup, [{
+      key: "update",
+      value: function update() {
+        // redraw the triangles.
+        var obj = this; // First remove all existing triangles.
+
+        obj.remove(); // Now create new ones.
+
+        obj.triangles = obj.data.subset.value.map(function (task) {
+          var triangle = new TriangleIcon(task, obj.accessor, obj.xscale, obj.yscale);
+          obj.node.appendChild(triangle.node);
+
+          triangle.node.onmouseenter = function () {
+            obj.onmouseenter(task);
+          }; // onmouseenter
+
+
+          triangle.node.onclick = function () {
+            obj.onclick(task);
+          }; // onclick
+
+
+          return triangle;
+        });
+      } // update
+
+    }, {
+      key: "repaint",
+      value: function repaint(selected) {
+        var obj = this;
+        obj.triangles.forEach(function (t) {
+          var color = "gainsboro";
+          var textflag = false;
+
+          if (t.task == obj.data.current || t.task == obj.data.datum) {
+            color = t.task == obj.data.current ? "cornflowerblue" : "orange";
+            t.node.parentElement.insertBefore(t.node, null);
+            textflag = t.task == obj.data.current;
+          } // if
+
+
+          t.highlight(color, textflag);
+        });
+        /*
+        obj.triangles.filter(t=>selected.includes(t.task)).forEach(function(t){
+             t.highlight("black", true);
+          t.node.parentElement.insertBefore(t.node,null)
+           })
+        */
+      } // repaint
+
+    }, {
+      key: "remove",
+      value: function remove() {
+        var obj = this;
+        obj.triangles.forEach(function (t) {
+          t.remove();
+        }); // forEach
+
+        obj.triangles = [];
+      } // remove
+      // Dummy
+
+    }, {
+      key: "onmouseenter",
+      value: function onmouseenter(selected) {} // onmouseenter
+
+    }, {
+      key: "onclick",
+      value: function onclick(selected) {} // onclick
+
+    }]);
+
+    return TriangleIconGroup;
+  }(); // TriangleIconGroup
+
+  function generatorLine(name, x1, y1, x2, y2, dx, dy, ndx, ndy) {
+    // Floor the values to the nearest pixel to avoid smearing?
+    var x1_ = Math.floor(x1 + dx);
+    var y1_ = Math.floor(y1 + dy);
+    var x2_ = Math.floor(x2 + dx);
+    var y2_ = Math.floor(y2 + dy); // Text positioning.
+    // let L = Math.sqrt( (y2-y1)**2 + (x2-x1)**2 );
+    // L = L>0 ? L : 1;
+    // let normal = [ (y2-y1)/L, (x2-x1)/L ];
+
+    var tx = (x1_ + x2_) / 2 + ndx;
+    var ty = (y1_ + y2_) / 2 + ndy;
+    var angle = Math.atan((y2 - y1) / (x2 - x1)) * 180 / Math.PI; // 0/0=NaN
+
+    angle = angle ? angle : 0;
+    return "<line stroke=\"gainsboro\" stroke-width=2 marker-end=\"url(#arrow-inactive)\" x1=\"".concat(x1_, "\" y1=\"").concat(y1_, "\" x2=\"").concat(x2_, "\" y2=\"").concat(y2_, "\"></line>\n\t<text text-anchor=\"middle\" style=\"display: none;\" transform=\"translate(").concat(tx, ", ").concat(ty, ") rotate(").concat(angle, ")\">").concat(name, "</text>");
+  } // generatorLine
+
+
+  function numformat(v) {
+    return parseFloat(v.toFixed(3));
+  }
+
+  var TriangleIcon = /*#__PURE__*/function () {
+    // Horizontal spacing between the U and Vtheta lines.
+    function TriangleIcon(task, accessor, xscale, yscale) {
+      _classCallCheck(this, TriangleIcon);
+
+      this.spacing = 3;
+      var obj = this;
+      obj.task = task;
+      var d = accessor(obj.task);
+      var nameVx = "Vx=".concat(numformat(d.Vx));
+      var nameVtheta = "Vtheta=".concat(numformat(d.Vtheta));
+      var nameV = "V=".concat(numformat(Math.sqrt(Math.pow(d.Vx, 2) + Math.pow(d.Vtheta, 2))));
+      var nameU = "U=".concat(numformat(d.U));
+      var nameVrel = "Vrel=".concat(numformat(Math.sqrt(Math.pow(d.Vx, 2) + Math.pow(-d.U + d.Vtheta, 2))));
+      obj.node = svg2element("<g>  \n\t    ".concat(generatorLine(nameVx, xscale(0), yscale(0), xscale(d.Vx), yscale(0), 0, 0, 0, 0), "\n\t    ").concat(generatorLine(nameVtheta, xscale(0), yscale(0), xscale(0), yscale(d.Vtheta), xscale(d.Vx) - xscale(0) - obj.spacing, 0, -12, 0), "\n\t\t").concat(generatorLine(nameV, xscale(0), yscale(0), xscale(d.Vx), yscale(d.Vtheta), 0, 0, 0, 0), "\n\t\t").concat(generatorLine(nameU, xscale(0), yscale(0), xscale(0), yscale(d.U), xscale(d.Vx) - xscale(0) + obj.spacing, yscale(-d.U + d.Vtheta) - yscale(0), 0, 0), "\n\t\t").concat(generatorLine(nameVrel, xscale(0), yscale(0), xscale(d.Vx), yscale(-d.U + d.Vtheta), 0, 0, 0, 0), "\n\t\t</g>"));
+      obj.lines = obj.node.querySelectorAll("line");
+      obj.labels = obj.node.querySelectorAll("text");
+    } // constructor
+
+
+    _createClass(TriangleIcon, [{
+      key: "highlight",
+      value: function highlight(color, textflag) {
+        var obj = this;
+
+        for (var i = 0; i < obj.lines.length; i++) {
+          obj.lines[i].style.stroke = color;
+          obj.lines[i].setAttribute("marker-end", "url(#arrow-".concat(color, ")"));
+          obj.labels[i].style.display = textflag ? "" : "none";
+        } // for
+
+      } // repaint
+
+    }, {
+      key: "remove",
+      value: function remove() {
+        this.node.remove();
+      } // remove
+
+    }]);
+
+    return TriangleIcon;
+  }(); // TriangleIcon
+
+  /*Should this be a separate plot maybe? And a plot that allows interactions? So it shows all the triangles, and all the radial contractions, and it allows the user to select using it? */
+
+  var RadialIconGroup = /*#__PURE__*/function () {
+    // This class should also display two designs at teh same time, using hte same color scheme (or similar) as the contour plot.
+    // This is just an icon subplot, and it may be hosted on hte same svg with other subplots. Therefore it is drawn into a prescribed box.
+    function RadialIconGroup(data, accessor, xscale, yscale) {
+      _classCallCheck(this, RadialIconGroup);
+
+      this.icons = [];
+      var obj = this;
+      obj.data = data;
+      obj.accessor = accessor; // Calculate the scale to use for drawing.
+
+      obj.xscale = xscale;
+      obj.yscale = yscale; // The translate is required to allow the plot to be drawn with a single scale.
+
+      obj.node = svg2element("<g>\n\t  <text class=\"cornflowerblue\" fill=\"cornflowerblue\" text-anchor=\"middle\" x=-10 y=-10></text>\n\t  <text class=\"orange\" fill=\"orange\" text-anchor=\"middle\" x=-10 y=-10></text>\n\t</g>");
+    } // constructor
+
+
+    _createClass(RadialIconGroup, [{
+      key: "update",
+      value: function update() {
+        // redraw the triangles.
+        var obj = this; // First remove all existing triangles.
+
+        obj.remove(); // Now create new ones.
+
+        obj.icons = obj.data.subset.value.map(function (task) {
+          var icon = new RadialIcon(task, obj.accessor, obj.xscale, obj.yscale);
+          obj.node.appendChild(icon.node);
+
+          icon.node.onmouseenter = function () {
+            obj.onmouseenter(task);
+          }; // onmouseenter
+
+
+          return icon;
+        });
+        obj.node.querySelector("text.cornflowerblue").setAttribute("x", obj.xscale(0.5));
+        obj.node.querySelector("text.cornflowerblue").setAttribute("y", obj.yscale(0) - 15);
+        obj.node.querySelector("text.orange").setAttribute("x", obj.xscale(0.5));
+        obj.node.querySelector("text.orange").setAttribute("y", obj.yscale(0) + 15);
+      } // update
+
+    }, {
+      key: "repaint",
+      value: function repaint() {
+        var obj = this;
+        obj.node.querySelector("text.orange").textContent = "";
+        obj.node.querySelector("text.cornflowerblue").textContent = "";
+        obj.icons.forEach(function (t) {
+          // If design is current it should be in blue, if datum orange, and if not gainsboro.
+          var color = "gainsboro";
+
+          if (t.task == obj.data.current || t.task == obj.data.datum) {
+            color = t.task == obj.data.current ? "cornflowerblue" : "orange";
+            obj.node.querySelector("text.".concat(color)).textContent = obj.accessor(t.task).toFixed(3);
+            t.node.parentElement.insertBefore(t.node, null);
+          } // if
+
+
+          t.highlight(color);
+        });
+        /* For an array of selected tasks
+        obj.icons.filter(t=>selected.includes(t.task)).forEach(function(t){
+             t.highlight("black", true);
+          t.node.parentElement.insertBefore(t.node,null)
+           })
+        */
+      } // repaint
+
+    }, {
+      key: "remove",
+      value: function remove() {
+        var obj = this;
+        obj.icons.forEach(function (t) {
+          t.remove();
+        }); // forEach
+
+        obj.icons = [];
+      } // remove
+      // Dummy
+
+    }, {
+      key: "onmouseenter",
+      value: function onmouseenter(selected) {} // onmouseenter
+
+    }]);
+
+    return RadialIconGroup;
+  }(); // RadialIconGroup
+
+  var RadialIcon = /*#__PURE__*/function () {
+    // Horizontal spacing between the U and Vtheta lines.
+    function RadialIcon(task, accessor, xscale, yscale) {
+      _classCallCheck(this, RadialIcon);
+
+      this.spacing = 3;
+      var obj = this;
+      obj.task = task;
+      var d = accessor(obj.task);
+      obj.node = svg2element("<path\n\t\t\tfill=\"none\" stroke=\"gainsboro\" stroke-width=\"2\"\n\t\t\td=\"\n\t\t\tM".concat(xscale(0), " ").concat(yscale(-1), "\n\t\t\tL").concat(xscale(0), " ").concat(yscale(1), "\n\t\t\tL").concat(xscale(1), " ").concat(yscale(d), "\n\t\t\tL").concat(xscale(1), " ").concat(yscale(-d), "\n\t\t\tL").concat(xscale(0), " ").concat(yscale(-1), "\"\n\t\t></path>").replace(/[\n\r]+/g, ' '));
+    } // constructor
+
+
+    _createClass(RadialIcon, [{
+      key: "highlight",
+      value: function highlight(color, textflag) {
+        var obj = this;
+        obj.node.style.stroke = color;
+      } // repaint
+
+    }, {
+      key: "remove",
+      value: function remove() {
+        this.node.remove();
+      } // remove
+
+    }]);
+
+    return RadialIcon;
+  }(); // RadialIcon
+
+  var generatorMarker = function generatorMarker(aspectRatio, size, name, color) {
+    return "<marker\n          id=\"".concat(name, "\"\n          viewBox=\"0 0 ").concat(aspectRatio * 5, " 5\"\n          refX=\"").concat(aspectRatio * 5, "\"\n          refY=\"2.5\"\n          markerWidth=\"").concat(size, "\"\n          markerHeight=\"").concat(size, "\"\n          orient=\"auto-start-reverse\">\n          shape-rendering=\"auto\"\n          <path fill=\"").concat(color, "\" d=\"M 0 0 L ").concat(aspectRatio * 5, " 2.5 L 0 5 z\" />\n     </marker>");
+  }; // generatorMarker
+  // The template can now hold one inset per div let's say. Maybe here I want to include a modelInputVariableSelectionInset and a twoInteractiveAxesInset. The drawing on the svg should be implemented here.
+
+
+  var template = "\n<svg width=400 height=400>\n  <defs>\n    <!-- Markers to be used as an arrowhead -->\n    ".concat(generatorMarker(2, 10, "arrow-cornflowerblue", "cornflowerblue"), "\n\t").concat(generatorMarker(2, 10, "arrow-orange", "orange"), "\n    ").concat(generatorMarker(2, 10, "arrow-gainsboro", "gainsboro"), "\t\n  </defs>\n  \n  <g class=\"background\"></g>\n  <g class=\"current\"></g>\n  <g class=\"lastselected\"></g>\n  \n</svg>\n");
+
+  var iconplot = /*#__PURE__*/function (_plotframe) {
+    _inherits(iconplot, _plotframe);
+
+    var _super = _createSuper(iconplot);
+
+    function iconplot(data) {
+      var _this;
+
+      _classCallCheck(this, iconplot);
+
+      _this = _super.call(this);
+      _this.width = 400;
+
+      _this.accessor = function () {};
+
+      _this.data = {
+        current: undefined,
+        datum: undefined,
+        tasks: undefined
+      };
+      _this.lastselected = undefined;
+      _this.facets = [1, 1, 1];
+
+      var obj = _assertThisInitialized(_this); // Data is a dataStorage item.
+
+
+      obj.data = data; // Append the plot backbone.
+
+      obj.svg = svg2element(template);
+      var container = obj.node.querySelector("div.card-body");
+      container.appendChild(obj.svg); // The scales. All scales need to have a unit aspect ratio of 1. This should be determined here. So scales can be made inside, but domains are governed from here.
+
+      obj.scales(obj.facets);
+      obj.inlet = new TriangleIconGroup(obj.data, function (task) {
+        return task.icons.inlet;
+      }, function (v) {
+        return -5;
+      }, function (v) {
+        return -5;
+      });
+      obj.svg.querySelector("g.background").appendChild(obj.inlet.node);
+      obj.radial = new RadialIconGroup(obj.data, function (task) {
+        return task.icons.radial;
+      }, function (v) {
+        return -5;
+      }, function (v) {
+        return -5;
+      });
+      obj.svg.querySelector("g.background").appendChild(obj.radial.node);
+      obj.outlet = new TriangleIconGroup(obj.data, function (task) {
+        return task.icons.outlet;
+      }, function (v) {
+        return -5;
+      }, function (v) {
+        return -5;
+      });
+      obj.svg.querySelector("g.background").appendChild(obj.outlet.node);
+
+      function coordinating(selected) {
+        obj.data.setcurrent(selected);
+        obj.data.repaint();
+      } // coordinating
+
+
+      obj.inlet.onmouseenter = coordinating;
+      obj.radial.onmouseenter = coordinating;
+      obj.outlet.onmouseenter = coordinating;
+
+      function selectdatum(selected) {
+        obj.data.selecttask(selected);
+        obj.data.repaint();
+      } // selectdatum
+
+
+      obj.inlet.onclick = selectdatum;
+      obj.radial.onclick = selectdatum;
+      obj.outlet.onclick = selectdatum; // Change the initial title
+
+      obj.node.querySelector("input.card-title").value = "Icons";
+      console.log(obj);
+      return _this;
+    } // constructor
+    // A function to partition hte plot and return coherent scales.
+
+
+    _createClass(iconplot, [{
+      key: "scales",
+      value: function scales(widths) {
+        var obj = this; // Partition the plot into facets, and create corresponding scales. There will be three facets by default, and the first and third need to have a consistent y scale.
+
+        var w = 400;
+        var h = 400;
+        var margin = 10;
+        var dw = w / widths.reduce(function (a, v) {
+          return a + v;
+        }, 0); // Calculate the value/pixel for all 4 axes that need to be coordinated.
+
+        var facetwidths = [widths[0] * dw - 2 * margin, widths[2] * dw - 2 * margin, h - 2 * margin];
+        var domains = obj.data.subset.value.reduce(function (acc, t) {
+          acc[0][0] = Math.min(acc[0][0], t.icons.inlet.Vx);
+          acc[0][1] = Math.max(acc[0][1], t.icons.inlet.Vx);
+          acc[1][0] = Math.min(acc[1][0], t.icons.outlet.Vx);
+          acc[1][1] = Math.max(acc[1][1], t.icons.outlet.Vx);
+          acc[2][0] = Math.min(acc[2][0], t.icons.inlet.Vtheta - t.icons.inlet.U, t.icons.outlet.Vtheta - t.icons.outlet.U);
+          acc[2][1] = Math.max(acc[2][1], t.icons.inlet.Vtheta, t.icons.outlet.Vtheta); // radial - here just the maximum value is needed.
+
+          acc[3] = Math.max(acc[3], t.icons.radial);
+          return acc;
+        }, [[0, Number.NEGATIVE_INFINITY], [0, Number.NEGATIVE_INFINITY], [0, Number.NEGATIVE_INFINITY], Number.NEGATIVE_INFINITY]); // Calculate the value per pixel, and select the smallest one.
+
+        var valPerPx = Math.max.apply(Math, _toConsumableArray([0, 1, 2].map(function (i) {
+          return (domains[i][1] - domains[i][0]) / facetwidths[i];
+        }))); // Now re-establish the domains. Make the data centered.
+
+        var xdomainin = [(domains[0][0] + domains[0][1]) / 2 - 1 / 2 * valPerPx * widths[0] * dw, (domains[0][0] + domains[0][1]) / 2 + 1 / 2 * valPerPx * widths[0] * dw];
+        var xdomainout = [(domains[1][0] + domains[1][1]) / 2 - 1 / 2 * valPerPx * widths[2] * dw, (domains[1][0] + domains[1][1]) / 2 + 1 / 2 * valPerPx * widths[2] * dw];
+        var ydomain = [(domains[2][0] + domains[2][1]) / 2 - 1 / 2 * valPerPx * h, (domains[2][0] + domains[2][1]) / 2 + 1 / 2 * valPerPx * h];
+        var sum = 0;
+        var ranges = widths.map(function (v, i) {
+          sum += v * dw;
+          return [sum - v * dw + margin, sum - margin];
+        }); // Scales for the triangles
+
+        var inletxscale = new ScaleLinear();
+        inletxscale.range = ranges[0];
+        inletxscale.domain = xdomainin;
+        var outletxscale = new ScaleLinear();
+        outletxscale.range = ranges[2];
+        outletxscale.domain = xdomainout;
+        var yscale = new ScaleLinear();
+        yscale.range = [0, h];
+        yscale.domain = ydomain; // Scales for the radial contraction icon. This should be easier, no need to coordinate anything.
+
+        var radialxscale = new ScaleLinear();
+        radialxscale.range = ranges[1];
+        radialxscale.domain = [0, 1]; // flags for inlet/outlet
+
+        var radialyscale = new ScaleLinear();
+        radialyscale.range = [h / 4, 3 * h / 4];
+        radialyscale.domain = [-domains[3], domains[3]]; // flags for inlet/outlet
+        // Scales for the radial contraction icon.
+
+        return {
+          inlet: {
+            x: inletxscale,
+            y: yscale
+          },
+          radial: {
+            x: radialxscale,
+            y: radialyscale
+          },
+          outlet: {
+            x: outletxscale,
+            y: yscale
+          }
+        }; // scales
+      } // scales
+
+    }, {
+      key: "repaint",
+      value: function repaint() {
+        // This is called when the datum design, or the currently inspected designs change.
+        var obj = this;
+        obj.inlet.repaint();
+        obj.radial.repaint();
+        obj.outlet.repaint();
+      } // repaint
+      // When is this update actually called??
+
+    }, {
+      key: "draw",
+      value: function draw() {
+        // Called when subset is changed
+        var obj = this;
+        obj.inlet.update();
+        obj.radial.update();
+        obj.outlet.update();
+      } // update
+
+    }, {
+      key: "update",
+      value: function update() {
+      } // update
+
+    }, {
+      key: "updatedata",
+      value: function updatedata() {
+        // When the data is updated the scales need to be redone, and reassigned.
+        var obj = this;
+        var scales = obj.scales(obj.facets);
+
+        obj.inlet.xscale = function (v) {
+          return scales.inlet.x.val2px(v);
+        };
+
+        obj.inlet.yscale = function (v) {
+          return scales.inlet.y.val2px(v);
+        };
+
+        obj.radial.xscale = function (v) {
+          return scales.radial.x.val2px(v);
+        };
+
+        obj.radial.yscale = function (v) {
+          return scales.radial.y.val2px(v);
+        };
+
+        obj.outlet.xscale = function (v) {
+          return scales.outlet.x.val2px(v);
+        };
+
+        obj.outlet.yscale = function (v) {
+          return scales.outlet.y.val2px(v);
+        };
+
+        obj.inlet.update();
+        obj.radial.update();
+        obj.outlet.update();
+      } // updatedata
+      // Should the insets have a g that is on top of everything, and on interactions copy the triangle there? That shouldn't destroy the interactions either I think.
+
+    }]);
+
+    return iconplot;
+  }(plotframe); // iconplot
+
   // SCATTERPLOT, quasi-CONTOURPLOT (really a lineplot), LINEPLOT
   // First add in the collapsible frames, and their toggle buttons.
 
   CollapsibleFrame.AddStyle();
-  var filtering = new CollapsibleFrame("Design");
-  var details = new CollapsibleFrame("Flow");
+  var geometry = new CollapsibleFrame("Geometry");
+  var flow = new CollapsibleFrame("Flow");
+  var details = new CollapsibleFrame("Details");
   var header = document.getElementById("header");
   var body = document.getElementById("plotcontainer");
-  var coordinate = [filtering, details];
+  var coordinate = [geometry, flow, details];
   coordinate.forEach(function (frm) {
     header.appendChild(frm.button);
     body.appendChild(frm.folder);
@@ -9551,7 +10154,8 @@
   console.log(data); // Data storage applies the filtering also, and precomputes a subset. Whenever the subset changes the plots should repaint, but also any header titles should adjust.
 
   data.subset.subscribe(function () {
-    filtering.label("(".concat(data.tasks.length, ")"));
+    geometry.label("(".concat(data.tasks.length, ")"));
+    flow.label("(".concat(data.tasks.length, ")"));
     details.label("(".concat(data.subset.value.length, ")"));
   }); // subscribe
   // PLOTS
@@ -9562,24 +10166,37 @@
     data.plots.push(p);
   } // addPlot
   // FILTERING PLOTS.
-  // Add a scatterplot as a filtering plot prototype.
+  // Add some geometry histograms.
+
+
+  var fTC = new filterhistgoram(data);
+  addPlot(fTC, geometry.folder);
+  var fSC = new filterhistgoram(data);
+  addPlot(fSC, geometry.folder);
+  var fPC = new filterhistgoram(data);
+  addPlot(fPC, geometry.folder); // Add a scatterplot as a filtering plot prototype.
   // Why do the filtering plots need to be available to filtering?
 
-
   var fsp = new filterscatterplot(data);
-  addPlot(fsp, filtering.folder);
+  addPlot(fsp, flow.folder);
   var fh = new filterhistgoram(data);
-  addPlot(fh, filtering.folder); // FLOW DETAIL PLOTS:
+  addPlot(fh, flow.folder); // ICON plot
 
-  var sp = new scatterplot(data);
-  addPlot(sp, details.folder);
+  var ip = new iconplot(data);
+  addPlot(ip, details.folder);
   data.subset.subscribe(function () {
-    sp.draw();
-  });
+    ip.draw();
+  }); // FLOW DETAIL PLOTS:
+
   var lc = new linecontourplot(data);
   addPlot(lc, details.folder);
   data.subset.subscribe(function () {
     lc.draw();
+  });
+  var sp = new scatterplot(data);
+  addPlot(sp, details.folder);
+  data.subset.subscribe(function () {
+    sp.draw();
   });
   var lp_mach = new linedistributionplot(data);
   addPlot(lp_mach, details.folder);
@@ -9600,9 +10217,32 @@
   var dataLoader = new dragDropHandler();
 
   dataLoader.ondragdropped = function (loadeddata) {
+    // Make some dummy test data here!
+    var Vx_base = 5;
+    var Vtheta_base = 2;
+    var U_base = 8;
+    loadeddata.forEach(function (t) {
+      t.icons = {
+        inlet: {
+          Vx: Vx_base + Math.random(),
+          Vtheta: Vtheta_base + Math.random(),
+          U: U_base + Math.random()
+        },
+        radial: 1 - Math.random() / 10,
+        outlet: {
+          Vx: Vx_base + Math.random(),
+          Vtheta: Vtheta_base + 4 + Math.random(),
+          U: U_base + Math.random()
+        }
+      }; // icons
+    }); // forEach
     // This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
-    data.add(loadeddata); // Filtering plot
 
+    data.add(loadeddata); // Filtering plots
+
+    fTC.updatedata();
+    fSC.updatedata();
+    fPC.updatedata();
     fsp.updatedata();
     fh.updatedata(); // Load the data in and assign the series.
 
@@ -9610,7 +10250,9 @@
     lc.updatedata(data.contours[0]);
     lp_mach.updatedata(data.distributions[0]);
     lp_camber.updatedata(data.distributions[1]);
-    lp_theta.updatedata(data.distributions[2]);
+    lp_theta.updatedata(data.distributions[2]); // Update the icon plot.
+
+    ip.updatedata();
   }; // ondragdropped
   // DRAGGING AND DROPPING THE DATA IS A DEVELOPMENT FEATURE.
 
@@ -9624,8 +10266,9 @@
   }; // Turn the details on by default. At the end so that the content has some height.
 
 
-  filtering.update(true); // Dev test dataset.
-  // dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
+  details.update(true); // Dev test dataset.
+
+  dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
 
 }());
 //# sourceMappingURL=app.js.map

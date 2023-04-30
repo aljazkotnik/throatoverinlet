@@ -12,6 +12,9 @@ import scatterplot from "./plots/scatterplot.js";
 import linecontourplot from "./plots/linecontourplot.js";
 import linedistributionplot from "./plots/linedistributionplot.js";
 
+// Icon plot.
+import iconplot from "./plots/iconplot.js";
+
 
 // The app will always look the same - three side-by-side plots.
 // SCATTERPLOT, quasi-CONTOURPLOT (really a lineplot), LINEPLOT
@@ -19,15 +22,16 @@ import linedistributionplot from "./plots/linedistributionplot.js";
 
 // First add in the collapsible frames, and their toggle buttons.
 CollapsibleFrame.AddStyle();
-const filtering = new CollapsibleFrame("Design");
-const details = new CollapsibleFrame("Flow");
+const geometry = new CollapsibleFrame("Geometry");
+const flow = new CollapsibleFrame("Flow");
+const details = new CollapsibleFrame("Details");
 
 
 const header = document.getElementById("header");
 const body = document.getElementById("plotcontainer");
 
 
-const coordinate = [filtering, details];
+const coordinate = [geometry, flow, details];
 coordinate.forEach(frm=>{
 	header.appendChild( frm.button )
 	body.appendChild( frm.folder )
@@ -62,7 +66,8 @@ console.log(data)
 
 // Data storage applies the filtering also, and precomputes a subset. Whenever the subset changes the plots should repaint, but also any header titles should adjust.
 data.subset.subscribe(function(){
-	filtering.label(`(${ data.tasks.length })`)
+	geometry.label(`(${ data.tasks.length })`)
+	flow.label(`(${ data.tasks.length })`)
 	details.label(`(${ data.subset.value.length })`)
 }) // subscribe
 
@@ -78,24 +83,47 @@ function addPlot(p, folder){
 
 
 // FILTERING PLOTS.
+
+
+// Add some geometry histograms.
+let fTC = new filterhistogram(data);
+addPlot(fTC, geometry.folder);
+
+let fSC = new filterhistogram(data);
+addPlot(fSC, geometry.folder);
+
+let fPC = new filterhistogram(data);
+addPlot(fPC, geometry.folder);
+
+
+
 // Add a scatterplot as a filtering plot prototype.
 // Why do the filtering plots need to be available to filtering?
 let fsp = new filterscatterplot(data);
-addPlot(fsp, filtering.folder);
+addPlot(fsp, flow.folder);
 
 let fh = new filterhistogram(data);
-addPlot(fh, filtering.folder);
+addPlot(fh, flow.folder);
+
+
+
+
+
+// ICON plot
+let ip = new iconplot(data)
+addPlot(ip, details.folder)
+data.subset.subscribe(function(){ ip.draw() })
 
 
 
 // FLOW DETAIL PLOTS:
-let sp = new scatterplot(data);
-addPlot(sp, details.folder)
-data.subset.subscribe(function(){ sp.draw() })
-
 let lc = new linecontourplot(data);
 addPlot(lc, details.folder)
 data.subset.subscribe(function(){ lc.draw() })
+
+let sp = new scatterplot(data);
+addPlot(sp, details.folder)
+data.subset.subscribe(function(){ sp.draw() })
 
 
 let lp_mach = new linedistributionplot(data);
@@ -120,20 +148,52 @@ data.subset.subscribe(function(){ lp_theta.draw() })
 
 let dataLoader = new dragDropHandler();
 dataLoader.ondragdropped = function(loadeddata){
+	
+
+	// Make some dummy test data here!
+	const Vx_base = 5;
+	const Vtheta_base = 2;
+	const U_base = 8;
+	loadeddata.forEach(function(t){
+		t.icons = {
+			inlet: {
+			  Vx: Vx_base + Math.random(),
+			  Vtheta: Vtheta_base + Math.random(),
+			  U: U_base + Math.random()
+			},
+			radial: 1 - Math.random()/10,
+			outlet: {
+			  Vx: Vx_base + Math.random(),
+			  Vtheta: Vtheta_base + 4 + Math.random(),
+			  U: U_base + Math.random()
+			}
+		} // icons
+	}) // forEach
+	
+	
+	
+	
 	// This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
 	data.add(loadeddata);
 	
-	// Filtering plot
+	// Filtering plots
+	fTC.updatedata();
+	fSC.updatedata();
+	fPC.updatedata();
 	fsp.updatedata();
 	fh.updatedata();
 	
 	// Load the data in and assign the series.
-	sp.updatedata()
-	lc.updatedata( data.contours[0] )
+	sp.updatedata();
+	lc.updatedata( data.contours[0] );
 	
-	lp_mach.updatedata( data.distributions[0] )
-	lp_camber.updatedata( data.distributions[1] )
-	lp_theta.updatedata( data.distributions[2] )
+	lp_mach.updatedata( data.distributions[0] );
+	lp_camber.updatedata( data.distributions[1] );
+	lp_theta.updatedata( data.distributions[2] );
+	
+	
+	// Update the icon plot.
+	ip.updatedata();
 	
 } // ondragdropped
 
@@ -145,11 +205,11 @@ document.body.ondragover = (ev)=>{dataLoader.ondragover(ev)};
 
 
 // Turn the details on by default. At the end so that the content has some height.
-filtering.update(true);
+details.update(true);
 
 
 
 
 
 // Dev test dataset.
-// dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
+dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);

@@ -165,12 +165,12 @@ export default class linecontourplot extends plotframe{
 			lines
 			  .attr("d", d=>obj.getpath(d))
 			  .attr("stroke", coloraccessor)
-			  
+			  .attr("stroke-width", d=>d.lineWidth ? d.lineWidth : 1 )
 			  
 			// Finally add new lines.
 			lines.enter()
 			  .append("path")
-				.attr("stroke-width", 1)
+				.attr("stroke-width", d=>d.lineWidth ? d.lineWidth : 1 )
 				.attr("stroke", coloraccessor)
 				.attr("fill", "none")
 				.attr("d", d=>obj.getpath(d) )
