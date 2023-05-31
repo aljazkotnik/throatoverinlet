@@ -150,29 +150,6 @@ let dataLoader = new dragDropHandler();
 dataLoader.ondragdropped = function(loadeddata){
 	
 
-	// Make some dummy test data here!
-	const Vx_base = 5;
-	const Vtheta_base = 2;
-	const U_base = 8;
-	loadeddata.forEach(function(t){
-		t.icons = {
-			inlet: {
-			  Vx: Vx_base + Math.random(),
-			  Vtheta: Vtheta_base + Math.random(),
-			  U: U_base + Math.random()
-			},
-			radial: 1 - Math.random()/10,
-			outlet: {
-			  Vx: Vx_base + Math.random(),
-			  Vtheta: Vtheta_base + 4 + Math.random(),
-			  U: U_base + Math.random()
-			}
-		} // icons
-	}) // forEach
-	
-	
-	
-	
 	// This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
 	data.add(loadeddata);
 	
@@ -212,4 +189,4 @@ details.update(true);
 
 
 // Dev test dataset.
-dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
+// dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);

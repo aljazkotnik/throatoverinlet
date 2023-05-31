@@ -137,11 +137,13 @@ class TriangleIcon{
 		let d = accessor(obj.task);
 		
 		
-		const nameVx = `Vx=${ numformat(d.Vx) }`;
-		const nameVtheta = `Vtheta=${ numformat(d.Vtheta) }`;
-		const nameV = `V=${ numformat( Math.sqrt(d.Vx**2+d.Vtheta**2) ) }`;
-		const nameU = `U=${ numformat( d.U ) }`;
-		const nameVrel = `Vrel=${ numformat( Math.sqrt(d.Vx**2+(-d.U+d.Vtheta)**2) ) }`;
+		// If any of hte numbers is zero, then display an empty label.
+		// Similarly if M==Mx then only one of them should be shown. M I guess?
+		const nameVx = d.Vx==0 || d.Vtheta==0 ? "" : `Mx=${ numformat(d.Vx) }`;
+		const nameVtheta = d.Vtheta==0 ? "" : `Mtheta=${ numformat(d.Vtheta) }`;
+		const nameV = (d.Vx**2+d.Vtheta**2)==0 ? "" : `M=${ numformat( Math.sqrt(d.Vx**2+d.Vtheta**2) ) }`;
+		const nameU = d.U==0 ? "" : `U=${ numformat( d.U ) }`;
+		const nameVrel = (d.Vx**2+(-d.U+d.Vtheta)**2)==0 ? "" : `Mrel=${ numformat( Math.sqrt(d.Vx**2+(-d.U+d.Vtheta)**2) ) }`;
 		
 		
 		obj.node = svg2element(`<g>  

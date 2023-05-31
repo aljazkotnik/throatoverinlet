@@ -9724,12 +9724,14 @@
       this.spacing = 3;
       var obj = this;
       obj.task = task;
-      var d = accessor(obj.task);
-      var nameVx = "Vx=".concat(numformat(d.Vx));
-      var nameVtheta = "Vtheta=".concat(numformat(d.Vtheta));
-      var nameV = "V=".concat(numformat(Math.sqrt(Math.pow(d.Vx, 2) + Math.pow(d.Vtheta, 2))));
-      var nameU = "U=".concat(numformat(d.U));
-      var nameVrel = "Vrel=".concat(numformat(Math.sqrt(Math.pow(d.Vx, 2) + Math.pow(-d.U + d.Vtheta, 2))));
+      var d = accessor(obj.task); // If any of hte numbers is zero, then display an empty label.
+      // Similarly if M==Mx then only one of them should be shown. M I guess?
+
+      var nameVx = d.Vx == 0 || d.Vtheta == 0 ? "" : "Mx=".concat(numformat(d.Vx));
+      var nameVtheta = d.Vtheta == 0 ? "" : "Mtheta=".concat(numformat(d.Vtheta));
+      var nameV = Math.pow(d.Vx, 2) + Math.pow(d.Vtheta, 2) == 0 ? "" : "M=".concat(numformat(Math.sqrt(Math.pow(d.Vx, 2) + Math.pow(d.Vtheta, 2))));
+      var nameU = d.U == 0 ? "" : "U=".concat(numformat(d.U));
+      var nameVrel = Math.pow(d.Vx, 2) + Math.pow(-d.U + d.Vtheta, 2) == 0 ? "" : "Mrel=".concat(numformat(Math.sqrt(Math.pow(d.Vx, 2) + Math.pow(-d.U + d.Vtheta, 2))));
       obj.node = svg2element("<g>  \n\t    ".concat(generatorLine(nameVx, xscale(0), yscale(0), xscale(d.Vx), yscale(0), 0, 0, 0, 0), "\n\t    ").concat(generatorLine(nameVtheta, xscale(0), yscale(0), xscale(0), yscale(d.Vtheta), xscale(d.Vx) - xscale(0) - obj.spacing, 0, -12, 0), "\n\t\t").concat(generatorLine(nameV, xscale(0), yscale(0), xscale(d.Vx), yscale(d.Vtheta), 0, 0, 0, 0), "\n\t\t").concat(generatorLine(nameU, xscale(0), yscale(0), xscale(0), yscale(d.U), xscale(d.Vx) - xscale(0) + obj.spacing, yscale(-d.U + d.Vtheta) - yscale(0), 0, 0), "\n\t\t").concat(generatorLine(nameVrel, xscale(0), yscale(0), xscale(d.Vx), yscale(-d.U + d.Vtheta), 0, 0, 0, 0), "\n\t\t</g>"));
       obj.lines = obj.node.querySelectorAll("line");
       obj.labels = obj.node.querySelectorAll("text");
@@ -10217,27 +10219,7 @@
   var dataLoader = new dragDropHandler();
 
   dataLoader.ondragdropped = function (loadeddata) {
-    // Make some dummy test data here!
-    var Vx_base = 5;
-    var Vtheta_base = 2;
-    var U_base = 8;
-    loadeddata.forEach(function (t) {
-      t.icons = {
-        inlet: {
-          Vx: Vx_base + Math.random(),
-          Vtheta: Vtheta_base + Math.random(),
-          U: U_base + Math.random()
-        },
-        radial: 1 - Math.random() / 10,
-        outlet: {
-          Vx: Vx_base + Math.random(),
-          Vtheta: Vtheta_base + 4 + Math.random(),
-          U: U_base + Math.random()
-        }
-      }; // icons
-    }); // forEach
     // This replaces the 'ondragdropped' function of the data loader, which executes whn the new data becomes available.
-
     data.add(loadeddata); // Filtering plots
 
     fTC.updatedata();
@@ -10267,8 +10249,7 @@
 
 
   details.update(true); // Dev test dataset.
-
-  dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
+  // dataLoader.loadfiles(["./assets/data/M95A60SC80TC4_psi040A95_t_c_Axt.json"]);
 
 }());
 //# sourceMappingURL=app.js.map
