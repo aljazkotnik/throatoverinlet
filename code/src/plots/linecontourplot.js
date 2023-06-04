@@ -175,13 +175,15 @@ export default class linecontourplot extends plotframe{
 				.attr("fill", "none")
 				.attr("d", d=>obj.getpath(d) )
 				.on("mouseenter", (e,d)=>{
-					e.target.setAttribute("stroke-width", 2)
+					// No stroke width changing because the lines are segments, so when mousing in only a segment is highlighted, and to highlight everything we'd have to search to see which other ones to highlight. And at width 1 they are too narrow to properly higlight anyway...
+					// e.target.setAttribute("stroke-width", 2)
 					obj.placetooltip(e,d);
 				})
+				/*
 				.on("mouseout", (e,d)=>{
 					e.target.setAttribute("stroke-width", 1)
 				}) // on
-				
+				*/
 			
 		} else {
 			d3.select(obj.node)

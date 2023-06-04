@@ -2278,6 +2278,12 @@
         accessor: function accessor(d) {
           return d.distribution["theta"];
         }
+      }, {
+        name: "stream",
+        extent: [],
+        accessor: function accessor(d) {
+          return d.distribution["stream"];
+        }
       }];
       this.contours = [{
         name: "mach",
@@ -2540,7 +2546,12 @@
         return [t.camber.s_ss[i], t.camber.theta_ss[i]];
       }); // map
 
-      var theta = theta1.concat(theta2.reverse()); // Create the series that can be plotted
+      var theta = theta1.concat(theta2.reverse()); // isentropic streamline
+
+      var stream = t.stream.is_s.map(function (v, i) {
+        return [t.stream.is_s[i], t.stream.is_M[i]];
+      }); // map
+      // Create the series that can be plotted
 
       t.distribution = {
         mach: {
@@ -2556,6 +2567,11 @@
         theta: {
           level: t.metadata.name[0],
           points: theta,
+          color: "cornflowerblue"
+        },
+        stream: {
+          level: t.metadata.name[0],
+          points: stream,
           color: "cornflowerblue"
         }
       }; // distribution
@@ -2599,6 +2615,10 @@
         level: "stag_line",
         points: t.contour.xrt_stag_line,
         color: "gray"
+      }, {
+        level: "is_line",
+        points: t.contour.xrt_is,
+        color: "magenta"
       }, {
         level: "bl",
         points: t.contour.bl,
@@ -9372,11 +9392,15 @@
           }).attr("stroke", coloraccessor).attr("fill", "none").attr("d", function (d) {
             return obj.getpath(d);
           }).on("mouseenter", function (e, d) {
-            e.target.setAttribute("stroke-width", 2);
+            // No stroke width changing because the lines are segments, so when mousing in only a segment is highlighted, and to highlight everything we'd have to search to see which other ones to highlight. And at width 1 they are too narrow to properly higlight anyway...
+            // e.target.setAttribute("stroke-width", 2)
             obj.placetooltip(e, d);
-          }).on("mouseout", function (e, d) {
-            e.target.setAttribute("stroke-width", 1);
-          }); // on
+          });
+          /*
+          .on("mouseout", (e,d)=>{
+          	e.target.setAttribute("stroke-width", 1)
+          }) // on
+          */
         } else {
           select(obj.node).select(gselector).selectAll("path").remove();
         } // if
@@ -10214,6 +10238,11 @@
   addPlot(lp_theta, details.folder);
   data.subset.subscribe(function () {
     lp_theta.draw();
+  });
+  var lp_stream = new linedistributionplot(data);
+  addPlot(lp_stream, details.folder);
+  data.subset.subscribe(function () {
+    lp_stream.draw();
   }); // ADD DRAG AND DROP FOR DATA
 
   var dataLoader = new dragDropHandler();
@@ -10232,7 +10261,8 @@
     lc.updatedata(data.contours[0]);
     lp_mach.updatedata(data.distributions[0]);
     lp_camber.updatedata(data.distributions[1]);
-    lp_theta.updatedata(data.distributions[2]); // Update the icon plot.
+    lp_theta.updatedata(data.distributions[2]);
+    lp_stream.updatedata(data.distributions[3]); // Update the icon plot.
 
     ip.updatedata();
   }; // ondragdropped

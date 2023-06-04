@@ -141,7 +141,9 @@ addPlot(lp_theta, details.folder)
 data.subset.subscribe(function(){ lp_theta.draw() })
 
 
-
+let lp_stream = new linedistributionplot(data);
+addPlot(lp_stream, details.folder)
+data.subset.subscribe(function(){ lp_stream.draw() })
 
 
 // ADD DRAG AND DROP FOR DATA
@@ -167,7 +169,7 @@ dataLoader.ondragdropped = function(loadeddata){
 	lp_mach.updatedata( data.distributions[0] );
 	lp_camber.updatedata( data.distributions[1] );
 	lp_theta.updatedata( data.distributions[2] );
-	
+	lp_stream.updatedata( data.distributions[3] );
 	
 	// Update the icon plot.
 	ip.updatedata();

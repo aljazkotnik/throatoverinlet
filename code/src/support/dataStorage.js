@@ -20,7 +20,8 @@ export default class dataStorage{
   distributions = [
 	  {name: "mach", extent: [], accessor: function(d){ return d.distribution["mach"] } },
 	  {name: "camber", extent: [], accessor: function(d){ return d.distribution["camber"] } },
-	  {name: "theta", extent: [], accessor: function(d){ return d.distribution["theta"] } }
+	  {name: "theta", extent: [], accessor: function(d){ return d.distribution["theta"] } },
+	  {name: "stream", extent: [], accessor: function(d){ return d.distribution["stream"] } }
   ]
   
   contours = [
@@ -287,12 +288,18 @@ function reformatDistributionData(tasks){
 		
 		
 		
+		// isentropic streamline
+		let stream = t.stream.is_s.map((v,i)=>{
+			return [t.stream.is_s[i], t.stream.is_M[i]]
+		}) // map
+		
 		
 		// Create the series that can be plotted
 		t.distribution = {
 			mach:   {level: t.metadata.name[0], points: mach, color: "cornflowerblue"},
 			camber: {level: t.metadata.name[0], points: camber, color: "cornflowerblue"},
-			theta:  {level: t.metadata.name[0], points: theta, color: "cornflowerblue"}
+			theta:  {level: t.metadata.name[0], points: theta, color: "cornflowerblue"},
+			stream: {level: t.metadata.name[0], points: stream, color: "cornflowerblue"}
 		} // distribution
 		
 	}) // forEach
@@ -327,7 +334,8 @@ function reformatContourData(tasks){
 			
 			{level: "throat_bl", points: t.contour.xrt_throat_bl, color: "magenta"},
 			{level: "stag_line", points: t.contour.xrt_stag_line, color: "gray"},
-			{level: "bl", points: t.contour.bl, color: "gray"},
+			{level: "is_line", points: t.contour.xrt_is, color: "magenta"},
+			{level: "bl", points: t.contour.bl, color: "gray"}
 		];
 
 		
